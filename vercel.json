@@ -1,0 +1,10 @@
+{
+  "buildCommand": "cd packages/client && pnpm build",
+  "outputDirectory": "packages/client/dist",
+  "installCommand": "pnpm install",
+  "functions": {
+    "app/api/**/*.js": {
+      "runtime": "nodejs20.x"
+    }
+  }
+}

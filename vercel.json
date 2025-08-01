@@ -1,8 +1,9 @@
 {
-  "buildCommand": "pnpm --filter client build",
+  "buildCommand": "cd packages/client && pnpm install && pnpm build",
   "outputDirectory": "packages/client/dist",
   "installCommand": "pnpm install --ignore-scripts",
   "framework": null
 }
+
 
 

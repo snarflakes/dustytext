@@ -6,7 +6,7 @@ import { SyncProvider } from "@latticexyz/store-sync/react";
 import { stash } from "./mud/stash";
 import { defineConfig, EntryKitProvider } from "@latticexyz/entrykit/internal";
 import { wagmiConfig } from "./wagmiConfig";
-import { chainId, getWorldAddress, startBlock } from "./common";
+import { getWorldAddress, startBlock } from "./common";
 
 const queryClient = new QueryClient();
 
@@ -18,8 +18,8 @@ export function Providers({ children }: Props) {
   const worldAddress = getWorldAddress();
   
   // Debug: log the chainId to see what it's actually using
-  console.log("Chain ID:", chainId);
-  console.log("World Address:", worldAddress);
+  // console.log("Chain ID:", chainId);
+  // console.log("World Address:", worldAddress);
   
   return (
     <WagmiProvider config={wagmiConfig}>
@@ -30,6 +30,7 @@ export function Providers({ children }: Props) {
             address={worldAddress}
             startBlock={startBlock}
             adapter={createSyncAdapter({ stash })}
+            indexerUrl={false}
           >
             {children}
           </SyncProvider>
@@ -38,4 +39,12 @@ export function Providers({ children }: Props) {
     </WagmiProvider>
   );
 }
+
+
+
+
+
+
+
+
 

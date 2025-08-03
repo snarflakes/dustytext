@@ -1,12 +1,8 @@
-import { stash } from "./mud/stash";
-import { useRecords } from "@latticexyz/stash/react";
 import { AccountButton } from "@latticexyz/entrykit/internal";
 import { Direction } from "./common";
 import mudConfig from "contracts/mud.config";
 import { useMemo, useState, useEffect, useRef } from "react";
 import { useWorldContract } from "./mud/useWorldContract";
-import { Synced } from "./mud/Synced";
-import { useSync } from "@latticexyz/store-sync/react";
 import { useAccount, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 import { chainId } from "./common";
@@ -24,25 +20,22 @@ export function App() {
   const { address, isConnected } = useAccount();
   const { data: balanceData } = useBalance({ address, chainId });
   
-  const players = useRecords({ stash, table: mudConfig.tables.app__Position });
-  const sync = useSync();
   const worldContract = useWorldContract();
 
   const onMove = useMemo(
     () =>
-      sync.data && worldContract
+      worldContract
         ? async (direction: Direction) => {
             try {
               setLog(prev => [...prev, `🚶 Moving ${direction}...`]);
-              const tx = await worldContract.write.app__move([mudConfig.enums.Direction.indexOf(direction)]);
-              await sync.data.waitForTransaction(tx);
+              await worldContract.write.app__move([mudConfig.enums.Direction.indexOf(direction)]);
               setLog(prev => [...prev, `✅ Moved ${direction} successfully!`]);
             } catch (error) {
               setLog(prev => [...prev, `❌ Move failed: ${error}`]);
             }
           }
         : undefined,
-    [sync.data, worldContract],
+    [worldContract],
   );
 
   const handleCommand = (e: React.FormEvent) => {
@@ -72,13 +65,9 @@ export function App() {
     } 
     // Game commands
     else if (command === 'look' || command === 'l') {
-      const playerCount = players.length;
-      setLog(prev => [...prev, `👀 You see a vast digital realm. ${playerCount} players are here.`]);
+      setLog(prev => [...prev, `👀 You see a vast digital realm.`]);
     } else if (command === 'players' || command === 'who') {
-      setLog(prev => [...prev, `👥 ${players.length} players online`]);
-      players.forEach((player, i) => {
-        setLog(prev => [...prev, `  ${i + 1}. ${player.player} at (${player.x}, ${player.y})`]);
-      });
+      setLog(prev => [...prev, `👥 Player data not available without sync`]);
     } else if (command === 'balance' || command === 'bal') {
       const formatted = balanceData
         ? `${parseFloat(formatUnits(balanceData.value, 18)).toFixed(5)} ETH`
@@ -87,8 +76,6 @@ export function App() {
     } else if (command === 'debug' || command === 'd') {
       setLog(prev => [...prev, `🔍 Debug info:`]);
       setLog(prev => [...prev, `  Address: ${address}`]);
-      setLog(prev => [...prev, `  Players synced: ${players.length}`]);
-      setLog(prev => [...prev, `  Sync status: ${sync.isSuccess ? 'Connected' : sync.isLoading ? 'Loading' : 'Error'}`]);
       setLog(prev => [...prev, `  World contract: ${worldContract ? 'Ready' : 'Not ready'}`]);
     } else if (command === 'help' || command === 'h') {
       setLog(prev => [...prev, 
@@ -122,12 +109,6 @@ export function App() {
     if (terminal) terminal.scrollTop = terminal.scrollHeight;
   }, [log]);
 
-  // Add temporary debug logging
-  useEffect(() => {
-    console.log("🔍 Players data:", players);
-    console.log("🔍 Sync status:", sync);
-  }, [players, sync]);
-
   return (
     <>
       <div className="fixed inset-0 flex flex-col bg-black text-green-400 font-mono">
@@ -146,45 +127,47 @@ export function App() {
 
         {/* Game Area */}
         <div className="flex-1 flex flex-col p-4">
-          <Synced
-            fallback={({ message, percentage, step }) => (
-              <div className="text-center text-yellow-400">
-                🔄 {message} ({percentage.toFixed(1)}%) - Step: {step}
-              </div>
-            )}
-          >
-            {/* Terminal */}
-            <div className="flex-1 flex flex-col">
-              <div 
-                ref={terminalRef}
-                className="flex-1 overflow-y-auto p-2 border border-green-400 bg-black"
-              >
-                {log.map((line, i) => (
-                  <div key={i} className="mb-1">{line}</div>
-                ))}
-              </div>
-              
-              {/* Command Input */}
-              <form onSubmit={handleCommand} className="mt-2">
-                <div className="flex">
-                  <span className="text-green-400 mr-2">$</span>
-                  <input
-                    value={input}
-                    onChange={e => setInput(e.target.value)}
-                    onKeyDown={handleKeyDown}
-                    placeholder="Type a command (help for commands)"
-                    className="flex-1 bg-transparent text-green-400 outline-none"
-                    autoFocus
-                  />
-                </div>
-              </form>
+          {/* Terminal */}
+          <div className="flex-1 flex flex-col">
+            <div 
+              ref={terminalRef}
+              className="flex-1 overflow-y-auto p-2 border border-green-400 bg-black"
+            >
+              {log.map((line, i) => (
+                <div key={i} className="mb-1">{line}</div>
+              ))}
             </div>
-          </Synced>
+            
+            {/* Command Input */}
+            <form onSubmit={handleCommand} className="mt-2">
+              <div className="flex">
+                <span className="text-green-400 mr-2">$</span>
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Type a command (help for commands)"
+                  className="flex-1 bg-transparent text-green-400 outline-none"
+                  autoFocus
+                />
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </>
   );
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -1,0 +1,82 @@
+**DUST + EntryKit + Quarry + Bundler Architecture Overview**
+
+---
+
+### 🔑 Wallets and Session Keys
+
+* **EOA Wallet** (e.g. MetaMask)
+
+  * User connects with wallet once.
+  * Approves session key via signature (off-chain or via `createSession(...)`).
+
+* **Session Key**
+
+  * A separate ephemeral private key, stored client-side.
+  * Authorized by EOA to sign `UserOperations` on their behalf.
+  * Used for automated gameplay actions like `move`, `jump`, etc.
+
+---
+
+### ⚙️ Smart Contract Wallet (SCW) = Gas Handler
+
+* Required by ERC-4337: all `UserOperations` are executed via a Smart Contract Wallet.
+* SCW validates the session key during `validateUserOp()`.
+* Delegates actual execution to game systems/contracts.
+
+---
+
+### 🚛 Bundler
+
+* Redstone now runs a bundler at `https://rpc.redstonechain.com`.
+* Bundler:
+
+  * Receives the signed `UserOperation`
+  * Simulates it
+  * Forwards it to the EntryPoint if valid
+
+---
+
+### ⛽ Quarry Paymaster
+
+* Separate from the SCW
+* Validates whether the user has prepaid gas in a Quarry balance
+* Deducts gas on operation approval
+* Interacts with both the EntryPoint and the game logic
+
+---
+
+### 🧾 UserOperation Flow Summary
+
+1. Session key signs a `UserOperation` (e.g., move packed direction).
+2. Bundler receives and simulates the op.
+3. Bundler forwards to `EntryPoint.handleOps()`.
+4. EntryPoint calls:
+
+   * `SCW.validateUserOp()` → session key validated
+   * `QuarryPaymaster.validatePaymasterUserOp()` → checks gas balance
+5. If valid, SCW delegates `execute()` to Dust contracts.
+6. Game state updates.
+
+---
+
+### 🧠 Trust + Security
+
+* The session key is only authorized to call game systems
+* All logic enforcing expiration/scope lives in the SCW's validation module
+* Gas limits are bounded by Quarry balance
+* SCW **does not hold assets** — it's a conduit for game execution and gas handling
+
+---
+
+### ✅ Minimum Open Source Expectations
+
+To build trust, open source:
+
+* Session key validator contract (validation module)
+* Message formats or signing payloads
+* Gas deposit logic (Quarry integration)
+* Game system whitelisting logic
+
+---
+
+This stack allows fully gas-abstracted, session-based gameplay on Dust — using smart accounts only for coordination, not custody.

@@ -1,0 +1,187 @@
+/* Retro Terminal Style */
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: black;
+  color: limegreen;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  flex-direction: column;
+}
+
+#react-root, .mud-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mud-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  border-bottom: 1px solid limegreen;
+  background: black;
+  flex-shrink: 0;
+}
+
+.mud-title {
+  margin: 0;
+  padding: 0;
+  font-size: 24px;
+  color: limegreen;
+  font-weight: bold;
+}
+
+.mud-terminal {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.terminal {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 15px;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  box-sizing: border-box;
+  background: black;
+  color: limegreen;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  line-height: 1.4;
+  scroll-behavior: smooth;
+}
+
+.terminal::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal::-webkit-scrollbar-track {
+  background: #001100;
+}
+
+.terminal::-webkit-scrollbar-thumb {
+  background: limegreen;
+  border-radius: 4px;
+}
+
+.terminal::-webkit-scrollbar-thumb:hover {
+  background: #00ff00;
+}
+
+.command-form {
+  border-top: 1px solid limegreen;
+  background: black;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.command-form .flex {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+}
+
+.mud-input {
+  flex: 1;
+  background: transparent;
+  color: limegreen;
+  border: none;
+  font-family: 'Courier New', monospace;
+  font-size: 16px;
+  outline: none;
+  margin-left: 8px;
+}
+
+.mud-input::placeholder {
+  color: #006600;
+}
+
+/* Header balance and button styling */
+.flex {
+  display: flex;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.gap-4 {
+  gap: 1rem;
+}
+
+.text-sm {
+  font-size: 0.875rem;
+  color: limegreen;
+  font-family: 'Courier New', monospace;
+}
+
+/* RainbowKit/EntryKit button customization */
+button[data-rk], 
+button[data-testid*="account"],
+button[data-testid*="connect"] {
+  background-color: black !important;
+  color: limegreen !important;
+  border: 1px solid limegreen !important;
+  font-family: 'Courier New', monospace !important;
+  font-size: 14px !important;
+  padding: 8px 16px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  transition: all 0.2s ease !important;
+}
+
+button[data-rk]:hover,
+button[data-testid*="account"]:hover,
+button[data-testid*="connect"]:hover {
+  background-color: #001100 !important;
+  color: #00ff00 !important;
+  border-color: #00ff00 !important;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+  .mud-header-row {
+    padding: 8px 12px;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .mud-title {
+    font-size: 18px;
+  }
+  
+  .terminal {
+    padding: 10px;
+    font-size: 13px;
+  }
+  
+  .command-form .flex {
+    padding: 8px 12px;
+  }
+  
+  .mud-input {
+    font-size: 14px;
+  }
+}
+
+/* Animation for new terminal lines */
+.terminal > div:last-child {
+  animation: fadeIn 0.1s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}

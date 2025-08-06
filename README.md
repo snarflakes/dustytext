@@ -45,6 +45,19 @@
 
 ---
 
+### 🧰 EntryKit Overview
+
+* EntryKit is a frontend developer toolkit for interacting with ERC-4337 smart accounts.
+* It abstracts away complex parts of account abstraction:
+
+  * Smart account deployment and connection
+  * Session signer generation and registration
+  * UserOperation construction and submission
+  * Bundler and Quarry Paymaster integration
+* EntryKit powers `signAndSendUserOperation()` and smart account UX, enabling gasless session-based gameplay.
+
+---
+
 ### 🧾 UserOperation Flow Summary
 
 1. Session key signs a `UserOperation` (e.g., move packed direction).

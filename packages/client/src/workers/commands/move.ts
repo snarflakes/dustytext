@@ -14,10 +14,10 @@ function encodePlayerEntityId(address: string): `0x${string}` {
 }
 
 const directionToEnum: Record<string, number> = {
-  north: 0, // Direction.North
-  east: 1,  // Direction.East
-  south: 2, // Direction.South
-  west: 3,  // Direction.West
+  north: 5, // Try West enum for North (Z movement)
+  east: 0,  // North enum moves east (X+) - keep
+  south: 4, // South enum for South (Z movement)  
+  west: 1,  // East enum moves west (X-) - keep
 };
 
 export class MoveCommand implements CommandHandler {

@@ -61,8 +61,8 @@ export function App() {
   useEffect(() => {
     // Share session client globally when available
     if (sessionClient) {
-      window.__entryKitSessionClient = sessionClient;
-      setSessionClient(sessionClient);
+      window.__entryKitSessionClient = sessionClient as unknown as typeof window.__entryKitSessionClient;
+      setSessionClient(sessionClient as unknown as Parameters<typeof setSessionClient>[0]);
       console.log('Session client shared globally:', sessionClient);
     } else {
       setSessionClient(null); // Clear when not available

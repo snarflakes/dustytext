@@ -4,46 +4,36 @@ import { CommandHandler, CommandContext } from './types';
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
 
 const MOVE_ABI = parseAbi([
-  'function move(address caller, uint256 packedDirections)',
+  'function moveDirections(bytes32 caller, uint8[] directions)',
 ]);
 
-const directionToContractIndex: Record<string, number> = {
-  north: 5, // -Z
-  south: 4, // +Z
-  east: 0,  // +X
-  west: 1,  // -X
-  up: 2,    // +Y
-  down: 3,  // -Y
-};
-
-function packDirections(directions: string[]): bigint {
-  if (directions.length > 50) {
-    throw new Error('Too many directions: max 50 allowed');
-  }
-
-  let packed = BigInt(0);
-
-  for (let i = 0; i < directions.length; i++) {
-    const dirIdx = directionToContractIndex[directions[i]];
-    if (dirIdx === undefined) {
-      throw new Error(`Invalid direction: ${directions[i]}`);
-    }
-    packed |= BigInt(dirIdx) << BigInt(i * 5);
-  }
-
-  packed |= BigInt(directions.length) << 250n;
-  return packed;
+function encodePlayerEntityId(address: string): `0x${string}` {
+  const prefix = "01";
+  const clean = address.toLowerCase().replace(/^0x/, "");
+  return `0x${prefix}${clean.padEnd(64 - prefix.length, "0")}` as `0x${string}`;
 }
+
+const directionToEnum: Record<string, number> = {
+  north: 0, // Direction.North
+  east: 1,  // Direction.East
+  south: 2, // Direction.South
+  west: 3,  // Direction.West
+};
 
 export class MoveCommand implements CommandHandler {
   async execute(context: CommandContext, direction: string): Promise<void> {
     try {
-      const packed = packDirections([direction]);
+      const directionEnum = directionToEnum[direction.toLowerCase()];
+      if (directionEnum === undefined) {
+        throw new Error(`Invalid direction: ${direction}`);
+      }
+
+      const entityId = encodePlayerEntityId(context.address);
 
       const data = encodeFunctionData({
         abi: MOVE_ABI,
-        functionName: 'move',
-        args: [context.address as `0x${string}`, packed],
+        functionName: 'moveDirections',
+        args: [entityId, [directionEnum]],
       });
 
       const txHash = await context.sessionClient.sendTransaction({
@@ -62,6 +52,8 @@ export class MoveCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

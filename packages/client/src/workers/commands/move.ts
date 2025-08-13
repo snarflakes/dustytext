@@ -43,8 +43,15 @@ export class MoveCommand implements CommandHandler {
       });
       
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `✅ Move ${direction} completed: ${txHash}` 
+        detail: `✅ Move ${direction} completed. Tx: ${txHash}` 
       }));
+
+      // Automatically look after successful move
+      const { getCommand } = await import('./registry');
+      const lookCommand = getCommand('look');
+      if (lookCommand) {
+        await lookCommand.execute(context);
+      }
     } catch (error) {
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: `❌ Move failed: ${error}` 

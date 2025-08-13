@@ -76,7 +76,8 @@ async function runWorkerCommand(command: string): Promise<void> {
   }
 
   window.dispatchEvent(new CustomEvent("worker-log", { 
-    detail: `🚀 Starting ${command} for ${address}...` 
+    //detail: `🚀 Starting ${command} for ${address}...`
+    detail: `You start to ${command} ...` 
   }));
 
   const context = { address, sessionClient };

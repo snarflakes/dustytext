@@ -161,6 +161,8 @@ export function App() {
       runCommand('health');
     } else if (command === 'explore') {
       runCommand('explore');
+    } else if (command === 'help' || command === 'h') {
+      runCommand('help');
     } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w'].includes(command)) {
       const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
       console.log(`Move command: ${direction}, Address: ${address}`);

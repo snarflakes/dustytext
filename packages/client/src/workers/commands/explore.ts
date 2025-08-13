@@ -1,7 +1,7 @@
 import { createPublicClient, http, type PublicClient } from "viem";
 import { redstone } from "viem/chains";
 import { getTerrainBlockType } from "../../terrain";
-import { objectNamesById } from "../../objects";
+import { objectNamesById, getFlowerDescriptor } from "../../objects";
 import { CommandHandler, CommandContext } from './types';
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
@@ -38,7 +38,17 @@ async function scanVerticalColumn(x: number, y: number, z: number): Promise<stri
     const pos = [x, y + dy, z] as [number, number, number];
     try {
       const type = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, pos);
-      const name = typeof type === "number" ? objectNamesById[type] ?? `Unknown(${type})` : "Empty";
+      let name = typeof type === "number" ? objectNamesById[type] ?? `Unknown(${type})` : "Empty";
+      
+      // Add capitalized descriptor in front for flowers and mushrooms
+      if (typeof type === "number") {
+        const descriptor = getFlowerDescriptor(type);
+        if (descriptor) {
+          const capitalizedDescriptor = descriptor.charAt(0).toUpperCase() + descriptor.slice(1);
+          name = `${capitalizedDescriptor} ${name}`;
+        }
+      }
+      
       names.push(`${dy >= 0 ? "+" : ""}${dy}: ${name}`);
     } catch {
       names.push(`${dy >= 0 ? "+" : ""}${dy}: [error]`);
@@ -115,3 +125,5 @@ export class ExploreCommand implements CommandHandler {
     }
   }
 }
+
+

@@ -236,3 +236,16 @@ export function getRandomDescriptor(blockId: number): string | undefined {
   if (!descriptors || descriptors.length === 0) return undefined;
   return descriptors[Math.floor(Math.random() * descriptors.length)];
 }
+
+// Enable descriptors only for specific block IDs
+export function getDescriptorForAllowedBlocks(blockId: number, allowedIds: number[]): string | undefined {
+  if (!allowedIds.includes(blockId)) return undefined;
+  return getRandomDescriptor(blockId);
+}
+
+// Example usage: only show descriptors for flowers and mushrooms
+export const FLOWER_AND_MUSHROOM_IDS = [70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 87, 88];
+
+export function getFlowerDescriptor(blockId: number): string | undefined {
+  return getDescriptorForAllowedBlocks(blockId, FLOWER_AND_MUSHROOM_IDS);
+}

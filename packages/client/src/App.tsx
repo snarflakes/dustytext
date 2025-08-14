@@ -167,6 +167,10 @@ export function App() {
       const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
       console.log(`Move command: ${direction}, Address: ${address}`);
       runCommand(`move ${direction}`);
+    } else if (command.startsWith('mine ') || command === 'mine') {
+      runCommand('mine');
+    } else if (command === 'inventory' || command === 'inv' || command === 'i') {
+      runCommand('inventory');
     }
     // Game commands
     else if (command === 'players' || command === 'who') {
@@ -220,7 +224,7 @@ export function App() {
       <div className="mud-container">
         {/* Header */}
         <div className="mud-header-row">
-          <h1 className="mud-title">🧱 Dusty Text MUD</h1>
+          <h1 className="mud-title">Dusty Text MUD</h1>
           <div className="flex items-center gap-4">
             {isConnected && balanceData && (
               <div className="text-sm">

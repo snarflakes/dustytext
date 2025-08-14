@@ -148,7 +148,7 @@ export class LookCommand implements CommandHandler {
           
           const biomeText = cachedDescriptors.biome ? `${cachedDescriptors.biome} ${biomeName}` : biomeName;
           const sensoryText = cachedDescriptors.hasSensory && cachedDescriptors.sensory ? ` ${cachedDescriptors.sensory}` : "";
-          biomeLabel = ` You are in the ${biomeText} biome.${sensoryText}`;
+          biomeLabel = ` You are in the ${biomeText}.${sensoryText}`;
         }
       } catch (biomeError) {
         console.log('LookCommand: Biome fetch failed:', biomeError);

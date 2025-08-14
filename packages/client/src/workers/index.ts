@@ -98,6 +98,7 @@ async function runWorkerCommand(command: string): Promise<void> {
 
   // Get and execute command
   const handler = getCommand(commandName);
+  console.log(`Looking for command: ${commandName}, found: ${!!handler}`);
   if (handler) {
     await handler.execute(context, ...args);
   } else {

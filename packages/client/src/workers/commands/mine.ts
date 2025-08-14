@@ -50,7 +50,7 @@ export class MineCommand implements CommandHandler {
       const { x, y, z } = { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
 
       // Mine the block of the player (not the ground they're standing on)
-      const mineY = y ; // Target the ground block instead of surface
+      const mineY = y ; 
       const packedCoord = packCoord96(x, mineY, z);
 
       console.log('Mine command - mining ground at:', { x, y: mineY, z });
@@ -95,6 +95,7 @@ export class MineCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

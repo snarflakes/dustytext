@@ -3,7 +3,7 @@ import { redstone } from "viem/chains";
 import { getTerrainBlockType } from "../../terrain";
 import { objectNamesById, getRandomDescriptor } from "../../objects";
 import { getBiome } from "../../biomeHelper";
-import { biomeNamesById, getRandomBiomeDescriptor } from "../../biomes";
+import { biomeNamesById, getRandomBiomeDescriptor, getRandomBiomeSensory } from "../../biomes";
 import { CommandHandler, CommandContext } from './types';
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
@@ -12,7 +12,7 @@ const POSITION_TABLE = "EntityPosition";
 const ORIENTATION_TABLE = "EntityOrientation";
 
 // Cache for consistent descriptors per location
-const descriptorCache = new Map<string, { terrain?: string; biome?: string }>();
+const descriptorCache = new Map<string, { terrain?: string; biome?: string; sensory?: string; hasSensory?: boolean }>();
 
 function getCacheKey(x: number, y: number, z: number): string {
   return `${x},${y},${z}`;
@@ -138,8 +138,17 @@ export class LookCommand implements CommandHandler {
             cachedDescriptors.biome = getRandomBiomeDescriptor(biomeId);
           }
           
+          // Use cached sensory or determine if this location has sensory (50% chance)
+          if (cachedDescriptors.hasSensory === undefined) {
+            cachedDescriptors.hasSensory = Math.random() < 0.5;
+            if (cachedDescriptors.hasSensory) {
+              cachedDescriptors.sensory = getRandomBiomeSensory(biomeId);
+            }
+          }
+          
           const biomeText = cachedDescriptors.biome ? `${cachedDescriptors.biome} ${biomeName}` : biomeName;
-          biomeLabel = ` You are in the ${biomeText} biome.`;
+          const sensoryText = cachedDescriptors.hasSensory && cachedDescriptors.sensory ? ` ${cachedDescriptors.sensory}` : "";
+          biomeLabel = ` You are in the ${biomeText} biome.${sensoryText}`;
         }
       } catch (biomeError) {
         console.log('LookCommand: Biome fetch failed:', biomeError);
@@ -162,6 +171,9 @@ export class LookCommand implements CommandHandler {
     }
   }
 }
+
+
+
 
 
 

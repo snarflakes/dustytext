@@ -46,6 +46,9 @@ export class MoveCommand implements CommandHandler {
         detail: `✅ Move ${direction} completed. Tx: ${txHash}` 
       }));
 
+      // Wait for indexer to update before looking
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       // Automatically look after successful move
       const { getCommand } = await import('./registry');
       const lookCommand = getCommand('look');

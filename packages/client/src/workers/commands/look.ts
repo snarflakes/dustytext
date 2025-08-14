@@ -100,6 +100,8 @@ export class LookCommand implements CommandHandler {
       
       try {
         const blockType = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, [x, y - 1, z]);
+        const surfaceBlockType = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, [x, y, z]);
+        
         if (typeof blockType === "number" && objectNamesById[blockType]) {
           const blockName = objectNamesById[blockType].toLowerCase();
           
@@ -109,7 +111,17 @@ export class LookCommand implements CommandHandler {
           }
           
           const terrainText = cachedDescriptors.terrain ? `${cachedDescriptors.terrain} ${blockName}` : blockName;
-          terrainLabel = `You are standing on ${terrainText}.`;
+          let surfaceText = "";
+          
+          // Check for surface objects like flowers/grass
+          if (typeof surfaceBlockType === "number" && objectNamesById[surfaceBlockType] && surfaceBlockType !== 1) { // 1 is Air
+            const surfaceName = objectNamesById[surfaceBlockType].toLowerCase();
+            const surfaceDescriptor = getRandomDescriptor(surfaceBlockType);
+            const surfaceDisplay = surfaceDescriptor ? `${surfaceDescriptor} ${surfaceName}` : surfaceName;
+            surfaceText = ` There is ${surfaceDisplay} here.`;
+          }
+          
+          terrainLabel = `You are standing on ${terrainText}.${surfaceText}`;
         } else {
           terrainLabel = "Unexplored terrain. Try 'explore'.";
         }
@@ -150,6 +162,8 @@ export class LookCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

@@ -7,6 +7,7 @@ import { ExploreCommand } from './explore.js';
 import { HelpCommand } from './help.js';
 import { MineCommand } from './mine.js';
 import { InventoryCommand } from './inventory.js';
+import { SpeakCommand } from './speak.js';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -19,6 +20,7 @@ commands.set('explore', new ExploreCommand());
 commands.set('help', new HelpCommand());
 commands.set('mine', new MineCommand());
 commands.set('inventory', new InventoryCommand());
+commands.set('speak', new SpeakCommand());
 
 // Debug logging
 console.log('Registry: Available commands:', Array.from(commands.keys()));
@@ -32,6 +34,7 @@ export function getCommand(name: string): CommandHandler | undefined {
 export function registerCommand(name: string, handler: CommandHandler): void {
   commands.set(name, handler);
 }
+
 
 
 

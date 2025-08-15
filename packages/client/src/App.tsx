@@ -171,6 +171,14 @@ export function App() {
       runCommand('mine');
     } else if (command === 'inventory' || command === 'inv' || command === 'i') {
       runCommand('inventory');
+    } else if (command.startsWith("'")) {
+      // Handle speak command directly - remove the leading quote
+      const message = command.substring(1);
+      if (!message.trim()) {
+        setLog(prev => [...prev, "❓ What do you want to say? Use: 'your message here"]);
+      } else {
+        setLog(prev => [...prev, `You say, "${message}"`]);
+      }
     }
     // Game commands
     else if (command === 'players' || command === 'who') {

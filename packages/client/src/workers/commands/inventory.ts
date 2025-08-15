@@ -47,7 +47,7 @@ export class InventoryCommand implements CommandHandler {
       }).join('\n  ');
       
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `📦 Inventory:\n  ${itemList}` 
+        detail: `📦 You fiddle around with your large burlap sack and find:\n  ${itemList}` 
       }));
     } catch (error) {
       window.dispatchEvent(new CustomEvent("worker-log", { 

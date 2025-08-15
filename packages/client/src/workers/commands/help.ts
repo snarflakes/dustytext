@@ -9,6 +9,9 @@ export class HelpCommand implements CommandHandler {
       '       Look/l (check your location),', 
       '       Health/hp,', 
       '       Explore (examine your environment),',
+      '       Speak (say something with symbol apostrophe before message),',
+      '       Inventory/inv/i (check what you have in storage),',
+      '       Mine (harvest resources at your feet),',
       '  Movement: north/n, south/s, east/e, west/w,',
       '  System: help/h, clear, balance/bal, players/who,',
       '  Debug: debug/d'

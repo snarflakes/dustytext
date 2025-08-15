@@ -41,7 +41,7 @@ export const transports = {
 
 export const wagmiConfig = createWagmiConfig({
   chainId,
-  walletConnectProjectId: "3f1000f6d9e0139778ab719fddba894a",
+  walletConnectProjectId: "f49c0a9791ae4e1caf93cad739a5d56e",
   appName: "Dust Wallet App",
   chains,
   transports,

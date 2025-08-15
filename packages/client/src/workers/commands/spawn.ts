@@ -62,7 +62,7 @@ export class SpawnCommand implements CommandHandler {
       });
 
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `✅ Spawn completed: ${txHash}` 
+        detail: `You blink into existence... born unto a blockchain. You are now in the matrix. ✅ Spawn completed: ${txHash}` 
       }));
     } catch (error) {
       window.dispatchEvent(new CustomEvent("worker-log", { 

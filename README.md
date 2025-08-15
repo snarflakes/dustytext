@@ -4,8 +4,8 @@
 
 
 
-**DUST + EntryKit + Quarry + Bundler Architecture Overview**
-### 🔑 Wallets and Session Keys
+### DUST + EntryKit + Quarry + Bundler Architecture Overview
+** 🔑 Wallets and Session Keys **
 
 * **EOA Wallet** (e.g. MetaMask)
 

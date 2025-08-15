@@ -1,20 +1,16 @@
-import { Chain, http, webSocket } from "viem";
+import { Chain, http } from "viem";
 import { anvil } from "viem/chains";
 import { createWagmiConfig } from "@latticexyz/entrykit/internal";
 import { garnet, pyrope, redstone } from "@latticexyz/common/chains";
 import { chainId } from "./common";
 
-const redstoneWithPaymaster = {
+const redstoneWithBundler = {
   ...redstone,
   rpcUrls: {
     ...redstone.rpcUrls,
-    wiresaw: {
-      http: ["https://wiresaw.redstonechain.com"],
-      webSocket: ["wss://wiresaw.redstonechain.com"],
-    },
     bundler: {
-      http: ["https://rpc.redstonechain.com"],
-      webSocket: ["wss://rpc.redstonechain.com"],
+      http: redstone.rpcUrls.default.http,
+      webSocket: redstone.rpcUrls.default.webSocket,
     },
   },
   contracts: {
@@ -26,16 +22,20 @@ const redstoneWithPaymaster = {
 };
 
 export const chains = [
-  redstoneWithPaymaster,
+  redstoneWithBundler,
   garnet,
   pyrope,
-  anvil, // Added temporarily to prevent errors
+  anvil,
 ] as const satisfies Chain[];
 
 export const transports = {
   [garnet.id]: http(),
   [pyrope.id]: http(),
-  [redstoneWithPaymaster.id]: http("https://rpc.redstonechain.com"),
+  [redstoneWithBundler.id]: http("https://rpc.redstonechain.com", {
+    timeout: 30_000,
+    retryCount: 3,
+    retryDelay: 2000
+  }),
   [anvil.id]: http(),
 } as const;
 
@@ -48,10 +48,20 @@ export const wagmiConfig = createWagmiConfig({
   pollingInterval: {
     [garnet.id]: 2000,
     [pyrope.id]: 2000,
-    [redstoneWithPaymaster.id]: 2000,
+    [redstoneWithBundler.id]: 2000,
     [anvil.id]: 1000,
   },
 });
+
+
+
+
+
+
+
+
+
+
 
 
 

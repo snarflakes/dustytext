@@ -1,12 +1,9 @@
 import { WagmiProvider } from "wagmi";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import { ReactNode } from "react";
-import { createSyncAdapter } from "@latticexyz/store-sync/internal";
-import { SyncProvider } from "@latticexyz/store-sync/react";
-import { stash } from "./mud/stash";
 import { defineConfig, EntryKitProvider } from "@latticexyz/entrykit/internal";
 import { wagmiConfig } from "./wagmiConfig";
-import { chainId, getWorldAddress, startBlock } from "./common";
+import { getWorldAddress } from "./common";
 
 const queryClient = new QueryClient();
 
@@ -17,25 +14,48 @@ export type Props = {
 export function Providers({ children }: Props) {
   const worldAddress = getWorldAddress();
   
-  // Debug: log the chainId to see what it's actually using
-  console.log("Chain ID:", chainId);
+  console.log("=== Provider Configuration ===");
+  console.log("Chain ID:", 690);
   console.log("World Address:", worldAddress);
+  
+  // Minimal EntryKit config to start
+  const entryKitConfig = defineConfig({ 
+    chainId: 690, 
+    worldAddress
+  });
+  
+  console.log("EntryKit config result:", entryKitConfig);
+  console.log("EntryKit config keys:", Object.keys(entryKitConfig));
   
   return (
     <WagmiProvider config={wagmiConfig}>
       <QueryClientProvider client={queryClient}>
-        <EntryKitProvider config={defineConfig({ chainId: 690, worldAddress })}>
-          <SyncProvider
-            chainId={690}
-            address={worldAddress}
-            startBlock={startBlock}
-            adapter={createSyncAdapter({ stash })}
-          >
-            {children}
-          </SyncProvider>
+        <EntryKitProvider config={entryKitConfig}>
+          {children}
         </EntryKitProvider>
       </QueryClientProvider>
     </WagmiProvider>
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

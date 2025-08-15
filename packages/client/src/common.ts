@@ -4,7 +4,7 @@ import { Chain } from "viem";
 
 export const chainId = 690; // Hardcoded for now
 export const worldAddress = import.meta.env.VITE_WORLD_ADDRESS || "0x253eb85B3C953bFE3827CC14a151262482E7189C";
-export const startBlock = BigInt(import.meta.env.VITE_START_BLOCK || "20874617");
+export const startBlock = BigInt(import.meta.env.VITE_START_BLOCK || "21032222");
 
 export const url = new URL(window.location.href);
 
@@ -24,5 +24,8 @@ export function getChain(): Chain {
   }
   return chain;
 }
+
+
+
 
 

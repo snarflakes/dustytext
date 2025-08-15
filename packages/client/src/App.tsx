@@ -36,7 +36,7 @@ declare global {
 export function App() {
   const [log, setLog] = useState<string[]>([
     "🧱 Welcome to Dusty Text MUD",
-    "Type 'help' for available commands"
+    "Type 'spawn' to enter the world! Type 'look' to see your surroundings. Type 'help' for all available commands."
   ]);
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<string[]>([]);

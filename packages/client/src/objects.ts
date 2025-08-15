@@ -132,7 +132,7 @@ export const objects: GameObject[] = [
   { id: 19, name: "Amethyst", descriptors: ["sparkling", "purple", "crystalline"] },
   { id: 20, name: "Glowstone", descriptors: ["luminous", "golden", "radiant"] },
   { id: 21, name: "Grass", descriptors: ["lush", "green", "soft"] },
-  { id: 22, name: "Dirt", descriptors: ["finely ground brown", "dusty", "yellow", "loamy", "earthy"] },
+  { id: 22, name: "Dirt", descriptors: ["finely ground brown", "dusty", "yellow", "loamy", "hardpacked"] },
   { id: 23, name: "Moss", descriptors: ["velvety", "green", "spongy"] },
   { id: 24, name: "Podzol", descriptors: ["rich", "brown", "fertile"] },
   { id: 25, name: "DirtPath", descriptors: ["worn", "trodden", "earthy"] },

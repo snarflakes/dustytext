@@ -26,6 +26,10 @@ function getOffsetForDirection(direction: string): [number, number] {
     case "east": return [1, 0];
     case "south": return [0, 1];
     case "west": return [-1, 0];
+    case "northeast": return [1, -1];
+    case "northwest": return [-1, -1];
+    case "southeast": return [1, 1];
+    case "southwest": return [-1, 1];
     default: return [0, 0];
   }
 }
@@ -104,9 +108,9 @@ export class ExploreCommand implements CommandHandler {
 
       if (direction) {
         // Directional exploration (5 blocks in specified direction)
-        const validDirections = ["north", "east", "south", "west"];
+        const validDirections = ["north", "east", "south", "west", "northeast", "northwest", "southeast", "southwest"];
         if (!validDirections.includes(direction.toLowerCase())) {
-          throw new Error(`Invalid direction: ${direction}. Use north, east, south, or west.`);
+          throw new Error(`Invalid direction: ${direction}. Use north, east, south, west, northeast, northwest, southeast, or southwest.`);
         }
 
         const [dx, dz] = getOffsetForDirection(direction.toLowerCase());
@@ -189,6 +193,8 @@ export class ExploreCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

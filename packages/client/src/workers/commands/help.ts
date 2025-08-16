@@ -5,10 +5,11 @@ export class HelpCommand implements CommandHandler {
     const helpText = [
       '📖 Available commands:',
       '  Game:', 
-      '       Spawn (if it doesnt work, submit command again),', 
+      '       Spawn (if it doesnt work, try again),', 
       '       Look/l (check your location),', 
       '       Health/hp,', 
-      '       Explore (examine your environment),',
+      '       Explore (examine your immediate environment),',
+      '       Explore <direction> (examine a specific direction for 5 blocks),',
       '       Speak (say something with symbol apostrophe before message),',
       '       Inventory/inv/i (check what you have in storage),',
       '       Mine (harvest resources at your feet),',

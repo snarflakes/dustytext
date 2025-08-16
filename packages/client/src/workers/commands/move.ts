@@ -46,12 +46,29 @@ const directionToEnum: Record<string, number> = {
   west: 1,  // East enum moves west (X-) - keep
 };
 
+const diagonalDirections: Record<string, number[]> = {
+  northeast: [5, 0], // North, then East
+  northwest: [5, 1], // North, then West
+  southeast: [4, 0], // South, then East
+  southwest: [4, 1], // South, then West
+};
+
 export class MoveCommand implements CommandHandler {
   async execute(context: CommandContext, direction: string): Promise<void> {
     try {
-      const directionEnum = directionToEnum[direction.toLowerCase()];
-      if (directionEnum === undefined) {
-        throw new Error(`Invalid direction: ${direction}`);
+      const lowerDirection = direction.toLowerCase();
+      let directionEnums: number[];
+      
+      // Check if it's a diagonal direction
+      if (diagonalDirections[lowerDirection]) {
+        directionEnums = diagonalDirections[lowerDirection];
+      } else {
+        // Single cardinal direction
+        const directionEnum = directionToEnum[lowerDirection];
+        if (directionEnum === undefined) {
+          throw new Error(`Invalid direction: ${direction}`);
+        }
+        directionEnums = [directionEnum];
       }
 
       const entityId = encodePlayerEntityId(context.address);
@@ -62,7 +79,7 @@ export class MoveCommand implements CommandHandler {
       const data = encodeFunctionData({
         abi: MOVE_ABI,
         functionName: 'moveDirections',
-        args: [entityId, [directionEnum]],
+        args: [entityId, directionEnums],
       });
 
       const txHash = await context.sessionClient.sendTransaction({

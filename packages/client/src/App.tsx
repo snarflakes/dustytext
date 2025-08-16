@@ -166,7 +166,7 @@ export function App() {
       runCommand(`explore ${direction}`);
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
-    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w'].includes(command)) {
+    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'northwest', 'southeast', 'southwest'].includes(command)) {
       const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
       console.log(`Move command: ${direction}, Address: ${address}`);
       runCommand(`move ${direction}`);

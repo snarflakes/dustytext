@@ -161,6 +161,9 @@ export function App() {
       runCommand('health');
     } else if (command === 'explore') {
       runCommand('explore');
+    } else if (command.startsWith('explore ')) {
+      const direction = command.split(' ')[1];
+      runCommand(`explore ${direction}`);
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
     } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w'].includes(command)) {

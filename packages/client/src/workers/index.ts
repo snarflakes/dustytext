@@ -13,7 +13,7 @@ let globalSessionClient: SessionClient | null = null;
 
 // Add rate limiting
 let lastCommandTime = 0;
-const COMMAND_COOLDOWN = 1000; // 1 second between commands
+const COMMAND_COOLDOWN = 100; // Reduced from 1000ms to 100ms
 
 export function setSessionClient(sessionClient: SessionClient | null) {
   globalSessionClient = sessionClient;

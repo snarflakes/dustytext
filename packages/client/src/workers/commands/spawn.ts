@@ -33,41 +33,52 @@ const abi = {
 
 export class SpawnCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {
-    try {
-      const publicClient = createPublicClient({
-        chain: redstone,
-        transport: http()
-      });
+    const maxRetries = 5;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const publicClient = createPublicClient({
+          chain: redstone,
+          transport: http()
+        });
 
-      const currentBlock = await publicClient.getBlockNumber();
-      const blockNumber = currentBlock - BigInt(2);
+        const currentBlock = await publicClient.getBlockNumber();
+        const blockNumber = currentBlock - BigInt(2); // Keep at 2 for now
 
-      const spawnCoord = await publicClient.readContract({
-        address: SPAWN_CONTRACT,
-        abi: abi.getRandomSpawnCoord,
-        functionName: 'getRandomSpawnCoord',
-        args: [blockNumber.toString(), context.address]
-      });
+        const spawnCoord = await publicClient.readContract({
+          address: SPAWN_CONTRACT,
+          abi: abi.getRandomSpawnCoord,
+          functionName: 'getRandomSpawnCoord',
+          args: [blockNumber.toString(), context.address]
+        });
 
-      const data = encodeFunctionData({
-        abi: abi.randomSpawn,
-        functionName: 'randomSpawn',
-        args: [blockNumber, spawnCoord as bigint]
-      });
+        const data = encodeFunctionData({
+          abi: abi.randomSpawn,
+          functionName: 'randomSpawn',
+          args: [blockNumber, spawnCoord as bigint]
+        });
 
-      const txHash = await context.sessionClient.sendTransaction({
-        to: SPAWN_CONTRACT,
-        data,
-        gas: 200000n,
-      });
+        const txHash = await context.sessionClient.sendTransaction({
+          to: SPAWN_CONTRACT,
+          data,
+          gas: 200000n,
+        });
 
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `You blink into existence... born unto a blockchain. You are now in the matrix. ✅ Spawn completed: ${txHash}` 
-      }));
-    } catch (error) {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `❌ Spawn failed: ${error}` 
-      }));
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `You blink into existence... born unto a blockchain. You are now in the matrix. ✅ Spawn completed: ${txHash}` 
+        }));
+        return;
+        
+      } catch (error) {
+        if (attempt === maxRetries) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ Spawn failed after ${maxRetries} attempts: ${error}` 
+          }));
+        } else {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
     }
   }
 }
+

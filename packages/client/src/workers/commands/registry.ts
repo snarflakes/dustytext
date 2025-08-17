@@ -8,6 +8,7 @@ import { HelpCommand } from './help.js';
 import { MineCommand } from './mine.js';
 import { InventoryCommand } from './inventory.js';
 import { SpeakCommand } from './speak.js';
+import { SurveyCommand } from './survey';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -21,10 +22,11 @@ commands.set('help', new HelpCommand());
 commands.set('mine', new MineCommand());
 commands.set('inventory', new InventoryCommand());
 commands.set('speak', new SpeakCommand());
+commands.set('survey', new SurveyCommand());
 
 // Debug logging
 console.log('Registry: Available commands:', Array.from(commands.keys()));
-console.log('Registry: Mine command registered:', commands.has('mine'));
+console.log('Registry: Survey command registered:', commands.has('survey'));
 
 export function getCommand(name: string): CommandHandler | undefined {
   console.log(`Registry: Looking for command "${name}", available:`, Array.from(commands.keys()));
@@ -34,6 +36,8 @@ export function getCommand(name: string): CommandHandler | undefined {
 export function registerCommand(name: string, handler: CommandHandler): void {
   commands.set(name, handler);
 }
+
+
 
 
 

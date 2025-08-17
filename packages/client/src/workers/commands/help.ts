@@ -7,6 +7,7 @@ export class HelpCommand implements CommandHandler {
       '  Game:', 
       '       Spawn (if it doesnt work, try again),', 
       '       Look/l (check your location),', 
+      '       Survey (detailed horizon sensing - slow),',
       '       Health/hp,', 
       '       Explore (examine your immediate environment),',
       '       Explore <direction> (examine a specific direction for 5 blocks, directions: north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw),',
@@ -25,5 +26,6 @@ export class HelpCommand implements CommandHandler {
     }
   }
 }
+
 
 

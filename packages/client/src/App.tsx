@@ -164,6 +164,8 @@ export function App() {
     } else if (command.startsWith('explore ')) {
       const direction = command.split(' ')[1];
       runCommand(`explore ${direction}`);
+    } else if (command === 'survey') {
+      runCommand('survey');
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
     } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw'].includes(command)) {

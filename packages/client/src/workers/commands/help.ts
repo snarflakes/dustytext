@@ -9,7 +9,7 @@ export class HelpCommand implements CommandHandler {
       '       Look/l (check your location),', 
       '       Health/hp,', 
       '       Explore (examine your immediate environment),',
-      '       Explore <direction> (examine a specific direction for 5 blocks),',
+      '       Explore <direction> (examine a specific direction for 5 blocks, directions: north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw),',
       '       Speak (say something with symbol apostrophe before message),',
       '       Inventory/inv/i (check what you have in storage),',
       '       Mine (harvest resources at your feet),',

@@ -22,14 +22,14 @@ function encodePlayerEntityId(address: string): `0x${string}` {
 
 function getOffsetForDirection(direction: string): [number, number] {
   switch (direction) {
-    case "north": return [0, -1];
-    case "east": return [1, 0];
-    case "south": return [0, 1];
-    case "west": return [-1, 0];
-    case "northeast": return [1, -1];
-    case "northwest": return [-1, -1];
-    case "southeast": return [1, 1];
-    case "southwest": return [-1, 1];
+    case "north": case "n": return [0, -1];
+    case "east": case "e": return [1, 0];
+    case "south": case "s": return [0, 1];
+    case "west": case "w": return [-1, 0];
+    case "northeast": case "ne": return [1, -1];
+    case "northwest": case "nw": return [-1, -1];
+    case "southeast": case "se": return [1, 1];
+    case "southwest": case "sw": return [-1, 1];
     default: return [0, 0];
   }
 }
@@ -108,9 +108,9 @@ export class ExploreCommand implements CommandHandler {
 
       if (direction) {
         // Directional exploration (5 blocks in specified direction)
-        const validDirections = ["north", "east", "south", "west", "northeast", "northwest", "southeast", "southwest"];
+        const validDirections = ["north", "n", "east", "e", "south", "s", "west", "w", "northeast", "ne", "northwest", "nw", "southeast", "se", "southwest", "sw"];
         if (!validDirections.includes(direction.toLowerCase())) {
-          throw new Error(`Invalid direction: ${direction}. Use north, east, south, west, northeast, northwest, southeast, or southwest.`);
+          throw new Error(`Invalid direction: ${direction}. Use north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, or southwest/sw.`);
         }
 
         const [dx, dz] = getOffsetForDirection(direction.toLowerCase());
@@ -193,6 +193,8 @@ export class ExploreCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

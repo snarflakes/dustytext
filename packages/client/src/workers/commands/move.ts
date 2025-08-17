@@ -40,17 +40,17 @@ async function getPlayerPosition(entityId: string): Promise<{x: number, y: numbe
 }
 
 const directionToEnum: Record<string, number> = {
-  north: 5, // Try West enum for North (Z movement)
-  east: 0,  // North enum moves east (X+) - keep
-  south: 4, // South enum for South (Z movement)  
-  west: 1,  // East enum moves west (X-) - keep
+  north: 5, n: 5, // Try West enum for North (Z movement)
+  east: 0, e: 0,  // North enum moves east (X+) - keep
+  south: 4, s: 4, // South enum for South (Z movement)  
+  west: 1, w: 1,  // East enum moves west (X-) - keep
 };
 
 const diagonalDirections: Record<string, number[]> = {
-  northeast: [5, 0], // North, then East
-  northwest: [5, 1], // North, then West
-  southeast: [4, 0], // South, then East
-  southwest: [4, 1], // South, then West
+  northeast: [5, 0], ne: [5, 0], // North, then East
+  northwest: [5, 1], nw: [5, 1], // North, then West
+  southeast: [4, 0], se: [4, 0], // South, then East
+  southwest: [4, 1], sw: [4, 1], // South, then West
 };
 
 export class MoveCommand implements CommandHandler {

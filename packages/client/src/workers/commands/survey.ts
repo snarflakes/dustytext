@@ -239,7 +239,7 @@ async function senseHorizon(pos: Vec3): Promise<string> {
         const dirNames = landDirections.map(d => d.toLowerCase());
         return `${riverPhrase} Dry land appears to be ${dirNames.join(" and ")}.`;
       } else {
-        return `${riverPhrase} Water continues 10+ blocks in all directions.`;
+        return `${riverPhrase} No end to water seen in all directions.`;
       }
     }
     

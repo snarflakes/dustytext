@@ -40,18 +40,35 @@ async function getPlayerPosition(entityId: string): Promise<{x: number, y: numbe
 }
 
 const directionToEnum: Record<string, number> = {
-  north: 5, // Try West enum for North (Z movement)
-  east: 0,  // North enum moves east (X+) - keep
-  south: 4, // South enum for South (Z movement)  
-  west: 1,  // East enum moves west (X-) - keep
+  north: 5, n: 5, // Try West enum for North (Z movement)
+  east: 0, e: 0,  // North enum moves east (X+) - keep
+  south: 4, s: 4, // South enum for South (Z movement)  
+  west: 1, w: 1,  // East enum moves west (X-) - keep
+};
+
+const diagonalDirections: Record<string, number[]> = {
+  northeast: [5, 0], ne: [5, 0], // North, then East
+  northwest: [5, 1], nw: [5, 1], // North, then West
+  southeast: [4, 0], se: [4, 0], // South, then East
+  southwest: [4, 1], sw: [4, 1], // South, then West
 };
 
 export class MoveCommand implements CommandHandler {
   async execute(context: CommandContext, direction: string): Promise<void> {
     try {
-      const directionEnum = directionToEnum[direction.toLowerCase()];
-      if (directionEnum === undefined) {
-        throw new Error(`Invalid direction: ${direction}`);
+      const lowerDirection = direction.toLowerCase();
+      let directionEnums: number[];
+      
+      // Check if it's a diagonal direction
+      if (diagonalDirections[lowerDirection]) {
+        directionEnums = diagonalDirections[lowerDirection];
+      } else {
+        // Single cardinal direction
+        const directionEnum = directionToEnum[lowerDirection];
+        if (directionEnum === undefined) {
+          throw new Error(`Invalid direction: ${direction}`);
+        }
+        directionEnums = [directionEnum];
       }
 
       const entityId = encodePlayerEntityId(context.address);
@@ -62,7 +79,7 @@ export class MoveCommand implements CommandHandler {
       const data = encodeFunctionData({
         abi: MOVE_ABI,
         functionName: 'moveDirections',
-        args: [entityId, [directionEnum]],
+        args: [entityId, directionEnums],
       });
 
       const txHash = await context.sessionClient.sendTransaction({
@@ -109,6 +126,15 @@ export class MoveCommand implements CommandHandler {
       if (errorMessage.includes('gas limit too low')) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+        }));
+        return;
+      }
+      
+      // Check for energy error (player is dead)
+      if (errorMessage.includes('Entity has no energy') || 
+          errorMessage.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
         }));
         return;
       }

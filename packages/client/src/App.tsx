@@ -173,9 +173,13 @@ export function App() {
       console.log(`Move command: ${direction}, Address: ${address}`);
       runCommand(`move ${direction}`);
     } else if (command.startsWith('mine ') || command === 'mine') {
-      runCommand('mine');
+      const target = command.startsWith('mine ') ? command.split(' ')[1] : undefined;
+      runCommand(`mine${target ? ` ${target}` : ''}`);
     } else if (command === 'inventory' || command === 'inv' || command === 'i') {
       runCommand('inventory');
+    } else if (command.startsWith('craft ')) {
+      const itemName = command.substring(6); // Remove 'craft ' prefix
+      runCommand(`craft ${itemName}`);
     } else if (command.startsWith("'")) {
       // Handle speak command directly - remove the leading quote
       const message = command.substring(1);

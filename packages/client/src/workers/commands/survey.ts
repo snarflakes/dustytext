@@ -182,13 +182,26 @@ async function senseHorizon(pos: Vec3): Promise<string> {
       // Check for elevation changes (mountains) - only if not already a river
       if (kind !== "river") {
         const heightDiff = r.maxHeight - pos.y;
-        if (heightDiff >= 2) {
-          score = Math.max(score, 10); // Mountains get high priority
+        
+        // Only count actual terrain blocks, not vegetation
+        const terrainBlocks = r.terrain.filter(t => 
+          t !== "air" && 
+          !t.includes("leaf") && 
+          !t.includes("grass") && 
+          !t.includes("log") && 
+          !t.includes("wood") &&
+          !t.includes("flower") &&
+          !t.includes("vine")
+        ).length;
+        
+        // Only consider it a mountain if there are actual terrain blocks AND height difference
+        if (heightDiff >= 2 && terrainBlocks >= 3) {
+          score = Math.max(score, 10);
           kind = "mountain";
         }
         
-        // Check for stone/rock indicating mountains
-        if (r.terrain.some(t => t.includes("stone") || t.includes("rock") || t.includes("granite") || t.includes("basalt"))) {
+        // Check for stone/rock indicating mountains - but only if we have terrain blocks
+        if (terrainBlocks >= 2 && r.terrain.some(t => t.includes("stone") || t.includes("rock") || t.includes("granite") || t.includes("basalt"))) {
           score = Math.max(score, 10);
           kind = "mountain";
         }
@@ -412,6 +425,8 @@ export class SurveyCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

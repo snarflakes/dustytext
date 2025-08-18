@@ -14,6 +14,7 @@ export class HelpCommand implements CommandHandler {
       '       Speak (say something with symbol apostrophe before message),',
       '       Inventory/inv/i (check what you have in storage),',
       '       Mine (harvest resources at your feet),',
+      '       Mine down (harvest the block beneath you),',
       '  Movement: north/n, south/s, east/e, west/w,',
       '  System: help/h, clear, balance/bal, players/who,',
       '  Debug: debug/d'
@@ -26,6 +27,7 @@ export class HelpCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

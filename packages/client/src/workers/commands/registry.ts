@@ -9,6 +9,7 @@ import { MineCommand } from './mine.js';
 import { InventoryCommand } from './inventory.js';
 import { SpeakCommand } from './speak.js';
 import { SurveyCommand } from './survey';
+import { CraftCommand } from './craft.js';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -23,6 +24,7 @@ commands.set('mine', new MineCommand());
 commands.set('inventory', new InventoryCommand());
 commands.set('speak', new SpeakCommand());
 commands.set('survey', new SurveyCommand());
+commands.set('craft', new CraftCommand());
 
 // Debug logging
 console.log('Registry: Available commands:', Array.from(commands.keys()));
@@ -36,6 +38,7 @@ export function getCommand(name: string): CommandHandler | undefined {
 export function registerCommand(name: string, handler: CommandHandler): void {
   commands.set(name, handler);
 }
+
 
 
 

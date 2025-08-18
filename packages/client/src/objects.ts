@@ -200,13 +200,98 @@ export type ObjectName =
   | "MagentaDye"
   | "LightBlueDye"
   | "LightGrayDye"
-  | "Glass";
+  | "Glass"
+  | "WhiteGlass"
+  | "OrangeGlass"
+  | "YellowGlass"
+  | "PinkGlass"
+  | "PurpleGlass"
+  | "BlueGlass"
+  | "GreenGlass"
+  | "RedGlass"
+  | "BlackGlass"
+  // Additional types used in recipes
+  | "AnyLog"
+  | "AnyLeaf"
+  | "AnyPlank"
+  | "Battery"
+  | "IronBar"
+  | "GoldBar"
+  | "Diamond"
+  | "NeptuniumBar"
+  | "WoodenPick"
+  | "WoodenAxe"
+  | "WoodenWhacker"
+  | "WoodenHoe"
+  | "CopperPick"
+  | "CopperAxe"
+  | "CopperWhacker"
+  | "IronPick"
+  | "IronAxe"
+  | "IronWhacker"
+  | "GoldPick"
+  | "GoldAxe"
+  | "DiamondPick"
+  | "DiamondAxe"
+  | "NeptuniumPick"
+  | "NeptuniumAxe"
+  | "Bucket"
+  | "WheatSlop"
+  | "PumpkinSoup"
+  | "MelonSmoothie"
+  | "MudBricks"
+  | "Paper"
+  | "Brick"
+  | "BrickBlock"
+  | "Stick"
+  | "WhiteConcretePowder"
+  | "OrangeConcretePowder"
+  | "MagentaConcretePowder"
+  | "YellowConcretePowder"
+  | "LightBlueConcretePowder"
+  | "BlueConcretePowder"
+  | "BrownConcretePowder"
+  | "GreenConcretePowder"
+  | "RedConcretePowder"
+  | "BlackConcretePowder"
+  | "WhiteConcrete"
+  | "OrangeConcrete"
+  | "MagentaConcrete"
+  | "LightBlueConcrete"
+  | "YellowConcrete"
+  | "LimeConcrete"
+  | "PinkConcrete"
+  | "GrayConcrete"
+  | "LightGrayConcrete"
+  | "CyanConcrete"
+  | "PurpleConcrete"
+  | "BlueConcrete"
+  | "BrownConcrete"
+  | "GreenConcrete"
+  | "RedConcrete"
+  | "BlackConcrete"
+  | "LimeConcretePowder"
+  | "PinkConcretePowder"
+  | "GrayConcretePowder"
+  | "LightGrayConcretePowder"
+  | "CyanConcretePowder"
+  | "PurpleConcretePowder"
+  | "WaterBucket"
+  | "PurpleGlass"
+  | "BlueGlass"
+  | "GreenGlass"
+  | "RedGlass"
+  | "BlackGlass"
+  | "Lodestone"
+  | "Cotton";
 
 // Define the GameObject interface with optional descriptors
 interface GameObject {
   id: number;
   name: ObjectName;
   descriptors?: string[]; // Optional array of descriptors
+  mass?: bigint; // Optional mass property
+  energy?: bigint; // Optional energy property
 }
 
 // Define the objects array with descriptors for some objects
@@ -430,6 +515,15 @@ export const objectDescriptorsById: Record<number, string[] | undefined> = objec
     return acc;
   },
   {} as Record<number, string[] | undefined>,
+);
+
+// Create the objectsByName mapping
+export const objectsByName: Record<ObjectName, GameObject> = objects.reduce(
+  (acc, obj) => {
+    acc[obj.name] = obj;
+    return acc;
+  },
+  {} as Record<ObjectName, GameObject>,
 );
 
 // Utility function to get a random descriptor for a given block ID

@@ -88,9 +88,14 @@ export class MineCommand implements CommandHandler {
         const pos = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
         const { x, y, z } = { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
 
+        // Determine mining position based on target
+        let mineY = y;
+        if (target === 'down') {
+          mineY = y - 1; // Mine the block below
+        }
+
         // Only commit chunks for player position and mining position
         const playerChunk = coordToChunkCoord(x, y, z);
-        const mineY = y ;
         const mineChunk = coordToChunkCoord(x, mineY, z);
         
         const chunksToCommit = new Set<string>();
@@ -129,9 +134,10 @@ export class MineCommand implements CommandHandler {
           gas: 300000n,
         });
 
-        const targetText = target ? ` ${target}` : '';
+        const targetText = target === 'down' ? ' down' : (target ? ` ${target}` : '');
+        const positionText = target === 'down' ? `(${x}, ${mineY}, ${z})` : `(${x}, ${y}, ${z})`;
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `✅ Mining${targetText} completed at (${x}, ${y}, ${z}). Tx: ${txHash}` 
+          detail: `✅ Mining${targetText} completed at ${positionText}. Tx: ${txHash}` 
         }));
 
         // Auto-look after mining
@@ -180,6 +186,7 @@ export class MineCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

@@ -59,6 +59,9 @@ export class MineCommand implements CommandHandler {
   async execute(context: CommandContext, target?: string): Promise<void> {
     const maxRetries = 3;
     
+    // Wait for indexer to be up-to-date before starting
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const entityId = encodePlayerEntityId(context.address);
@@ -177,6 +180,8 @@ export class MineCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

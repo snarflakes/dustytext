@@ -56,8 +56,30 @@ async function mineWithOptionalTool(
 }
 
 export class MineCommand implements CommandHandler {
-  async execute(context: CommandContext, target?: string): Promise<void> {
+  async execute(context: CommandContext, ...args: string[]): Promise<void> {
     const maxRetries = 3;
+    
+    // Parse arguments - check if we have coordinates passed as JSON string
+    let target: string | undefined;
+    let coords: { x: number, y: number, z: number } | undefined;
+    
+    if (args.length > 0) {
+      console.log('Mine command - received args:', args);
+      // Check if first arg is JSON coordinates
+      try {
+        const parsed = JSON.parse(args[0]);
+        if (parsed && typeof parsed.x === 'number' && typeof parsed.y === 'number' && typeof parsed.z === 'number') {
+          coords = parsed;
+          console.log('Mine command - parsed coordinates:', coords);
+        } else {
+          target = args[0];
+          console.log('Mine command - using target:', target);
+        }
+      } catch {
+        target = args[0];
+        console.log('Mine command - failed to parse JSON, using target:', target);
+      }
+    }
     
     // Wait for indexer to be up-to-date before starting
     await new Promise(resolve => setTimeout(resolve, 2500));
@@ -66,37 +88,46 @@ export class MineCommand implements CommandHandler {
       try {
         const entityId = encodePlayerEntityId(context.address);
 
-        // Get player position
-        const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
-        const posRes = await fetch(INDEXER_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
-        });
+        let mineX: number, mineY: number, mineZ: number;
 
-        if (!posRes.ok) {
-          throw new Error(`Position fetch failed: ${posRes.status}`);
-        }
+        if (coords) {
+          // Use provided coordinates for remote mining
+          mineX = coords.x;
+          mineY = coords.y;
+          mineZ = coords.z;
+        } else {
+          // Get player position for traditional mining
+          const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
+          const posRes = await fetch(INDEXER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
+          });
 
-        const posJson = await posRes.json();
-        const posRows = posJson?.result?.[0];
-        if (!Array.isArray(posRows) || posRows.length < 2) {
-          throw new Error("No position found. Try 'spawn' first.");
-        }
+          if (!posRes.ok) {
+            throw new Error(`Position fetch failed: ${posRes.status}`);
+          }
 
-        const [posCols, posVals] = posRows;
-        const pos = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
-        const { x, y, z } = { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
+          const posJson = await posRes.json();
+          const posRows = posJson?.result?.[0];
+          if (!Array.isArray(posRows) || posRows.length < 2) {
+            throw new Error("No position found. Try 'spawn' first.");
+          }
 
-        // Determine mining position based on target
-        let mineY = y;
-        if (target === 'down') {
-          mineY = y - 1; // Mine the block below
+          const [posCols, posVals] = posRows;
+          const pos = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
+          const { x, y, z } = { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
+
+          // Determine mining position based on target
+          mineX = x;
+          mineY = target === 'down' ? y - 1 : y;
+          mineZ = z;
         }
 
         // Only commit chunks for player position and mining position
-        const playerChunk = coordToChunkCoord(x, y, z);
-        const mineChunk = coordToChunkCoord(x, mineY, z);
+        const playerPos = coords ? await this.getPlayerPosition(entityId) : { x: mineX, y: mineY, z: mineZ };
+        const playerChunk = coordToChunkCoord(playerPos.x, playerPos.y, playerPos.z);
+        const mineChunk = coordToChunkCoord(mineX, mineY, mineZ);
         
         const chunksToCommit = new Set<string>();
         chunksToCommit.add(`${playerChunk.cx},${playerChunk.cy},${playerChunk.cz}`);
@@ -118,9 +149,9 @@ export class MineCommand implements CommandHandler {
           }
         }
 
-        const packedCoord = packCoord96(x, mineY, z);
+        const packedCoord = packCoord96(mineX, mineY, mineZ);
 
-        console.log('Mine command - mining at:', { x, y: mineY, z });
+        console.log('Mine command - mining at:', { x: mineX, y: mineY, z: mineZ });
         console.log('Mine command - entityId:', entityId);
         console.log('Mine command - packed coord:', packedCoord.toString(16));
 
@@ -134,8 +165,8 @@ export class MineCommand implements CommandHandler {
           gas: 300000n,
         });
 
-        const targetText = target === 'down' ? ' down' : (target ? ` ${target}` : '');
-        const positionText = target === 'down' ? `(${x}, ${mineY}, ${z})` : `(${x}, ${y}, ${z})`;
+        const targetText = coords ? ` at (${mineX}, ${mineY}, ${mineZ})` : (target === 'down' ? ' down' : (target ? ` ${target}` : ''));
+        const positionText = `(${mineX}, ${mineY}, ${mineZ})`;
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `✅ Mining${targetText} completed at ${positionText}. Tx: ${txHash}` 
         }));
@@ -151,6 +182,15 @@ export class MineCommand implements CommandHandler {
         
       } catch (error) {
         const errorMessage = String(error);
+        
+        // Check for "Coordinate is not reachable" error
+        if (errorMessage.includes('Coordinate is not reachable') || 
+            errorMessage.includes('436f6f7264696e617465206973206e6f7420726561636861626c650000000000')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ That location is beyond your reach or something is blocking your way, try mining blocks above or below it first.` 
+          }));
+          return;
+        }
         
         // Check for "Object is not mineable" error
         if (errorMessage.includes('Object is not mineable') || 
@@ -197,7 +237,30 @@ export class MineCommand implements CommandHandler {
       }
     }
   }
+
+  private async getPlayerPosition(entityId: string): Promise<{ x: number, y: number, z: number }> {
+    const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
+    const posRes = await fetch(INDEXER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
+    });
+
+    const posJson = await posRes.json();
+    const posRows = posJson?.result?.[0];
+    if (!Array.isArray(posRows) || posRows.length < 2) {
+      throw new Error("No position found");
+    }
+
+    const [posCols, posVals] = posRows;
+    const pos = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
+    return { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
+  }
 }
+
+
+
+
 
 
 

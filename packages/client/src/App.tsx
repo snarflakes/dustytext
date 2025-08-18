@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useAccount, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 import { chainId, getWorldAddress } from "./common";
-import "./app.css";
+import "tailwindcss/tailwind.css";
+import "./app.css"; // Add this import for the clickable block styles
 
 declare global {
   interface Window {
@@ -166,6 +167,8 @@ export function App() {
       runCommand(`explore ${direction}`);
     } else if (command === 'survey') {
       runCommand('survey');
+    } else if (command === 'done') {
+      runCommand('done');
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
     } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
@@ -233,7 +236,32 @@ export function App() {
       setTimeout(() => {
         terminal.scrollTop = terminal.scrollHeight;
       }, 0);
+
+      // Add click handler for clickable blocks
+      const handleClick = (event: Event) => {
+        const target = event.target as HTMLElement;
+        if (target.classList.contains('clickable-block')) {
+          const blockData = target.getAttribute('data-block');
+          const blockId = target.getAttribute('data-id');
+          
+          if (blockData && blockId) {
+            window.dispatchEvent(new CustomEvent('block-click', {
+              detail: { blockData, blockId }
+            }));
+          }
+        }
+      };
+
+      terminal.addEventListener('click', handleClick);
+      
+      return () => {
+        terminal.removeEventListener('click', handleClick);
+      };
     }
+  }, [log]);
+
+  useEffect(() => {
+    console.log('Latest log entry:', log[log.length - 1]);
   }, [log]);
 
   return (
@@ -260,7 +288,10 @@ export function App() {
             className="terminal"
           >
             {log.map((line, i) => (
-              <div key={i}>{line}</div>
+              <div 
+                key={i} 
+                dangerouslySetInnerHTML={{ __html: line }}
+              />
             ))}
           </div>
           

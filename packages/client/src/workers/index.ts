@@ -96,6 +96,16 @@ async function runWorkerCommand(command: string): Promise<void> {
     }
   }
 
+  // Clear mining queue for any command except 'done'
+  if (commandName !== 'done') {
+    try {
+      const { clearSelection } = await import('./commands/explore');
+      clearSelection();
+    } catch (error) {
+      // Ignore if explore module isn't available
+    }
+  }
+
   // Get and execute command
   const handler = getCommand(commandName);
   console.log(`Looking for command: ${commandName}, found: ${!!handler}`);

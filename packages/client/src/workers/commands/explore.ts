@@ -9,6 +9,14 @@ const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const POSITION_TABLE = "EntityPosition";
 const ORIENTATION_TABLE = "EntityOrientation";
 
+// Column width for explore formatting
+const COL_CH = 18; // width of each column in monospace "characters"
+
+/** wrap any text in a fixed-width cell */
+function cell(text: string) {
+  return `<span class="explore-cell" style="display:inline-block;width:${COL_CH}ch;vertical-align:top;">${text}</span>`;
+}
+
 const publicClient = createPublicClient({
   chain: redstone,
   transport: http(),
@@ -76,13 +84,18 @@ let selectedBlocks: SelectableBlock[] = [];
 let isSelectionMode = false;
 
 function createClickableBlock(block: SelectableBlock): string {
-  // Don't make Air clickable since it can't be mined
   if (block.name === "Air" || block.name === "Empty") {
-    return block.name;
+    return cell(block.name);
   }
-  
+
   const blockId = `block-${block.x}-${block.y}-${block.z}`;
-  return `<span class="clickable-block" data-block='${JSON.stringify(block)}' data-id="${blockId}" style="text-decoration: underline; font-weight: bold; cursor: pointer; color: #3b82f6;">${block.name}</span>`;
+  const link = `<span class="clickable-block"
+      data-block='${JSON.stringify(block)}'
+      data-id="${blockId}"
+      style="text-decoration: underline; cursor: pointer; color: #3b82f6;"
+    >${block.name}</span>`;
+
+  return cell(link);
 }
 
 function handleBlockClick(event: Event) {
@@ -207,13 +220,15 @@ export class ExploreCommand implements CommandHandler {
 
         // Format as columns with clickable blocks
         const header = `Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}):\n\n`;
-        const coordLine = columns.map(col => `Block ${col.distance}`.padEnd(20)).join(" ");
-        const posLine = columns.map(col => col.coord.padEnd(20)).join(" ");
-        
-        const layerLines = [];
+
+        // use fixed-width cells instead of padEnd/spaces
+        const coordLine = columns.map(col => cell(`Block ${col.distance}`)).join(" ");
+        const posLine   = columns.map(col => cell(col.coord)).join(" ");
+
+        const layerLines: string[] = [];
         for (let i = 0; i < layers.length; i++) {
           const dy = layers[i];
-          const blockParts = columns.map((col) => {
+          const blockCells = columns.map((col) => {
             const blockData: SelectableBlock = {
               x: x + (dx * col.distance),
               y: y + dy,
@@ -222,16 +237,15 @@ export class ExploreCommand implements CommandHandler {
               distance: col.distance,
               layer: dy
             };
-            return createClickableBlock(blockData);
+            return createClickableBlock(blockData); // already returns a fixed-width cell
           });
-          
-          // Join with spacing that accounts for the layer prefix
-          const blockRow = blockParts.join("               "); // 15 spaces between columns
-          layerLines.push(`${dy >= 0 ? "+" : ""}${dy}: ${blockRow}`);
+
+          // add space between columns for alignment
+          layerLines.push(`${dy >= 0 ? "+" : ""}${dy}: ${blockCells.join(" ")}`);
         }
 
-        const msg = header + coordLine + "\n" + posLine + "\n" + layerLines.join("\n");
-        
+        const msg = `<pre class="explore-output">${header}${coordLine}\n${posLine}\n${layerLines.join("\n")}</pre>`;
+
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: msg 
         }));
@@ -265,7 +279,7 @@ export class ExploreCommand implements CommandHandler {
           report.push(`\n${dir.toUpperCase()} at (${tx}, ${y}, ${tz}):\n${clickableColumn.map(l => "  " + l).join("\n")}`);
         }
 
-        const msg = `You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).${report.join("\n")}`;
+        const msg = `<pre class="explore-output">You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).${report.join("\n")}</pre>`;
         
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: msg 
@@ -282,9 +296,11 @@ export class ExploreCommand implements CommandHandler {
 // Export functions for done command
 export { selectedBlocks };
 export function clearSelection() {
-  selectedBlocks = [];
+  selectedBlocks.splice(0, selectedBlocks.length); // Clear array completely
   isSelectionMode = false;
+  console.log('Selection cleared, selectedBlocks length:', selectedBlocks.length);
 }
+
 
 
 

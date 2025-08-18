@@ -101,7 +101,9 @@ async function runWorkerCommand(command: string): Promise<void> {
     try {
       const { clearSelection } = await import('./commands/explore');
       clearSelection();
+      console.log('Cleared mining selection for non-done command:', commandName);
     } catch (error) {
+      console.log('Failed to clear selection:', error);
       // Ignore if explore module isn't available
     }
   }

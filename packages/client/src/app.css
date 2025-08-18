@@ -214,5 +214,30 @@ button[data-testid*="connect"]:hover {
   word-wrap: break-word;
 }
 
+/* Explore command output formatting */
+.explore-output {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: pre;            /* keep newlines/spaces */
+}
+
+.explore-cell { 
+  display: inline-block; 
+  vertical-align: top; 
+}
+
+.clickable-block { 
+  text-decoration: underline; 
+  font-weight: normal; 
+  cursor: pointer; 
+}
+
+/* Terminal styling to ensure HTML renders properly */
+.terminal {
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+
 
 

@@ -161,8 +161,20 @@ export class MineCommand implements CommandHandler {
           return;
         }
         
+        // Check for energy error (player is dead) - multiple formats
+        if (errorMessage.includes('Entity has no energy') || 
+            errorMessage.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000') ||
+            errorMessage.includes('456e7469747920686173206e6f20656e65726779')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
+          }));
+          return;
+        }
+        
         if (errorMessage.includes('Chunk commitment expired') || 
-            errorMessage.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000')) {
+            errorMessage.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000') ||
+            errorMessage.includes('Not within commitment blocks') ||
+            errorMessage.includes('4e6f742077697468696e20636f6d6d69746d656e7420626c6f636b7300000000')) {
           if (attempt < maxRetries) {
             window.dispatchEvent(new CustomEvent("worker-log", { 
               detail: `⏳ Chunk data expired, retrying... (${attempt}/${maxRetries})` 
@@ -186,6 +198,8 @@ export class MineCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

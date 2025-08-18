@@ -191,17 +191,25 @@ async function senseHorizon(pos: Vec3): Promise<string> {
           !t.includes("log") && 
           !t.includes("wood") &&
           !t.includes("flower") &&
-          !t.includes("vine")
-        ).length;
+          !t.includes("vine") &&
+          !t.includes("bush")
+        );
         
-        // Only consider it a mountain if there are actual terrain blocks AND height difference
-        if (heightDiff >= 2 && terrainBlocks >= 3) {
-          score = Math.max(score, 10);
-          kind = "mountain";
-        }
+        // Count earthen/rocky blocks specifically
+        const earthenBlocks = r.terrain.filter(t => 
+          t.includes("stone") || 
+          t.includes("rock") || 
+          t.includes("granite") || 
+          t.includes("basalt") ||
+          t.includes("dirt") ||
+          t.includes("clay") ||
+          t.includes("gravel")
+        );
         
-        // Check for stone/rock indicating mountains - but only if we have terrain blocks
-        if (terrainBlocks >= 2 && r.terrain.some(t => t.includes("stone") || t.includes("rock") || t.includes("granite") || t.includes("basalt"))) {
+        // Require 75% earthen blocks AND significant height difference for mountain
+        const earthenPercentage = r.terrain.length > 0 ? (earthenBlocks.length / r.terrain.length) : 0;
+        
+        if (earthenPercentage >= 0.75 && heightDiff >= 2 && terrainBlocks.length >= 5) {
           score = Math.max(score, 10);
           kind = "mountain";
         }
@@ -425,6 +433,8 @@ export class SurveyCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

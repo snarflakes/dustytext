@@ -12,7 +12,7 @@ export class SpeakCommand implements CommandHandler {
     }
 
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `You say, "${message}"` 
+      detail: `<span class="speak-prefix">You say,</span> <span class="speak-message">"${message}"</span>` 
     }));
   }
 }

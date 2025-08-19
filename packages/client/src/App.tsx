@@ -194,7 +194,7 @@ export function App() {
       if (!message.trim()) {
         setLog(prev => [...prev, "❓ What do you want to say? Use: 'your message here"]);
       } else {
-        setLog(prev => [...prev, `You say, "${message}"`]);
+        setLog(prev => [...prev, `<span class="speak-prefix">You say,</span> <span class="speak-message">"${message}"</span>`]);
       }
     }
     // Game commands

@@ -56,39 +56,78 @@ async function mineWithOptionalTool(
 }
 
 export class MineCommand implements CommandHandler {
-  async execute(context: CommandContext, target?: string): Promise<void> {
+  async execute(context: CommandContext, ...args: string[]): Promise<void> {
     const maxRetries = 3;
+    
+    // Parse arguments - check if we have coordinates passed as JSON string
+    let target: string | undefined;
+    let coords: { x: number, y: number, z: number } | undefined;
+    
+    if (args.length > 0) {
+      console.log('Mine command - received args:', args);
+      // Check if first arg is JSON coordinates
+      try {
+        const parsed = JSON.parse(args[0]);
+        if (parsed && typeof parsed.x === 'number' && typeof parsed.y === 'number' && typeof parsed.z === 'number') {
+          coords = parsed;
+          console.log('Mine command - parsed coordinates:', coords);
+        } else {
+          target = args[0];
+          console.log('Mine command - using target:', target);
+        }
+      } catch {
+        target = args[0];
+        console.log('Mine command - failed to parse JSON, using target:', target);
+      }
+    }
+    
+    // Wait for indexer to be up-to-date before starting
+    await new Promise(resolve => setTimeout(resolve, 2500));
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
         const entityId = encodePlayerEntityId(context.address);
 
-        // Get player position
-        const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
-        const posRes = await fetch(INDEXER_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
-        });
+        let mineX: number, mineY: number, mineZ: number;
 
-        if (!posRes.ok) {
-          throw new Error(`Position fetch failed: ${posRes.status}`);
+        if (coords) {
+          // Use provided coordinates for remote mining
+          mineX = coords.x;
+          mineY = coords.y;
+          mineZ = coords.z;
+        } else {
+          // Get player position for traditional mining
+          const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
+          const posRes = await fetch(INDEXER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
+          });
+
+          if (!posRes.ok) {
+            throw new Error(`Position fetch failed: ${posRes.status}`);
+          }
+
+          const posJson = await posRes.json();
+          const posRows = posJson?.result?.[0];
+          if (!Array.isArray(posRows) || posRows.length < 2) {
+            throw new Error("No position found. Try 'spawn' first.");
+          }
+
+          const [posCols, posVals] = posRows;
+          const pos = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
+          const { x, y, z } = { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
+
+          // Determine mining position based on target
+          mineX = x;
+          mineY = target === 'down' ? y - 1 : y;
+          mineZ = z;
         }
-
-        const posJson = await posRes.json();
-        const posRows = posJson?.result?.[0];
-        if (!Array.isArray(posRows) || posRows.length < 2) {
-          throw new Error("No position found. Try 'spawn' first.");
-        }
-
-        const [posCols, posVals] = posRows;
-        const pos = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
-        const { x, y, z } = { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
 
         // Only commit chunks for player position and mining position
-        const playerChunk = coordToChunkCoord(x, y, z);
-        const mineY = y ;
-        const mineChunk = coordToChunkCoord(x, mineY, z);
+        const playerPos = coords ? await this.getPlayerPosition(entityId) : { x: mineX, y: mineY, z: mineZ };
+        const playerChunk = coordToChunkCoord(playerPos.x, playerPos.y, playerPos.z);
+        const mineChunk = coordToChunkCoord(mineX, mineY, mineZ);
         
         const chunksToCommit = new Set<string>();
         chunksToCommit.add(`${playerChunk.cx},${playerChunk.cy},${playerChunk.cz}`);
@@ -110,25 +149,32 @@ export class MineCommand implements CommandHandler {
           }
         }
 
-        const packedCoord = packCoord96(x, mineY, z);
+        const packedCoord = packCoord96(mineX, mineY, mineZ);
 
-        console.log('Mine command - mining at:', { x, y: mineY, z });
+        console.log('Mine command - mining at:', { x: mineX, y: mineY, z: mineZ });
         console.log('Mine command - entityId:', entityId);
         console.log('Mine command - packed coord:', packedCoord.toString(16));
+
+        // Check for equipped tool
+        const equippedTool = (globalThis as typeof globalThis & { equippedTool: { slot: number; type: string; name: string } | null }).equippedTool;
+        const selectedToolSlot = equippedTool ? equippedTool.slot : 0;
+        const hasToolEquipped = !!equippedTool;
 
         // Use the new mining function with tool support
         const txHash = await mineWithOptionalTool(context.sessionClient, WORLD_ADDRESS, {
           caller: entityId,
           packedCoord,
-          selectedToolSlot: 0,
-          hasToolEquipped: false,
+          selectedToolSlot,
+          hasToolEquipped,
           extraData: '0x',
           gas: 300000n,
         });
 
-        const targetText = target ? ` ${target}` : '';
+        const targetText = coords ? ` at (${mineX}, ${mineY}, ${mineZ})` : (target === 'down' ? ' down' : (target ? ` ${target}` : ''));
+        const positionText = `(${mineX}, ${mineY}, ${mineZ})`;
+        const toolText = hasToolEquipped ? ` using ${equippedTool.type}` : '';
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `✅ Mining${targetText} completed at (${x}, ${y}, ${z}). Tx: ${txHash}` 
+          detail: `✅ Mining${targetText} completed at ${positionText}${toolText}. Tx: ${txHash}` 
         }));
 
         // Auto-look after mining
@@ -143,6 +189,15 @@ export class MineCommand implements CommandHandler {
       } catch (error) {
         const errorMessage = String(error);
         
+        // Check for "Coordinate is not reachable" error
+        if (errorMessage.includes('Coordinate is not reachable') || 
+            errorMessage.includes('436f6f7264696e617465206973206e6f7420726561636861626c650000000000')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ That location is beyond your reach or something is blocking your way, try mining blocks above or below it first.` 
+          }));
+          return;
+        }
+        
         // Check for "Object is not mineable" error
         if (errorMessage.includes('Object is not mineable') || 
             errorMessage.includes('4f626a656374206973206e6f74206d696e6561626c6500000000000000000000')) {
@@ -152,8 +207,20 @@ export class MineCommand implements CommandHandler {
           return;
         }
         
+        // Check for energy error (player is dead) - multiple formats
+        if (errorMessage.includes('Entity has no energy') || 
+            errorMessage.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000') ||
+            errorMessage.includes('456e7469747920686173206e6f20656e65726779')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
+          }));
+          return;
+        }
+        
         if (errorMessage.includes('Chunk commitment expired') || 
-            errorMessage.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000')) {
+            errorMessage.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000') ||
+            errorMessage.includes('Not within commitment blocks') ||
+            errorMessage.includes('4e6f742077697468696e20636f6d6d69746d656e7420626c6f636b7300000000')) {
           if (attempt < maxRetries) {
             window.dispatchEvent(new CustomEvent("worker-log", { 
               detail: `⏳ Chunk data expired, retrying... (${attempt}/${maxRetries})` 
@@ -176,7 +243,37 @@ export class MineCommand implements CommandHandler {
       }
     }
   }
+
+  private async getPlayerPosition(entityId: string): Promise<{ x: number, y: number, z: number }> {
+    const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
+    const posRes = await fetch(INDEXER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
+    });
+
+    const posJson = await posRes.json();
+    const posRows = posJson?.result?.[0];
+    if (!Array.isArray(posRows) || posRows.length < 2) {
+      throw new Error("No position found");
+    }
+
+    const [posCols, posVals] = posRows;
+    const pos = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
+    return { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
+  }
 }
+
+
+
+
+
+
+
+
+
+
+
 
 
 

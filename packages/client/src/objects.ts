@@ -200,13 +200,101 @@ export type ObjectName =
   | "MagentaDye"
   | "LightBlueDye"
   | "LightGrayDye"
-  | "Glass";
+  | "Glass"
+  | "WhiteGlass"
+  | "OrangeGlass"
+  | "YellowGlass"
+  | "PinkGlass"
+  | "PurpleGlass"
+  | "BlueGlass"
+  | "GreenGlass"
+  | "RedGlass"
+  | "BlackGlass"
+  // Additional types used in recipes
+  | "AnyLog"
+  | "AnyLeaf"
+  | "AnyPlank"
+  | "Battery"
+  | "IronBar"
+  | "GoldBar"
+  | "Diamond"
+  | "NeptuniumBar"
+  | "WoodenPick"
+  | "WoodenAxe"
+  | "WoodenWhacker"
+  | "WoodenHoe"
+  | "CopperPick"
+  | "CopperAxe"
+  | "CopperWhacker"
+  | "IronPick"
+  | "IronAxe"
+  | "IronWhacker"
+  | "GoldPick"
+  | "GoldAxe"
+  | "DiamondPick"
+  | "DiamondAxe"
+  | "NeptuniumPick"
+  | "NeptuniumAxe"
+  | "Bucket"
+  | "WheatSlop"
+  | "PumpkinSoup"
+  | "MelonSmoothie"
+  | "MudBricks"
+  | "Paper"
+  | "Brick"
+  | "BrickBlock"
+  | "Stick"
+  | "WhiteConcretePowder"
+  | "OrangeConcretePowder"
+  | "MagentaConcretePowder"
+  | "YellowConcretePowder"
+  | "LightBlueConcretePowder"
+  | "BlueConcretePowder"
+  | "BrownConcretePowder"
+  | "GreenConcretePowder"
+  | "RedConcretePowder"
+  | "BlackConcretePowder"
+  | "WhiteConcrete"
+  | "OrangeConcrete"
+  | "MagentaConcrete"
+  | "LightBlueConcrete"
+  | "YellowConcrete"
+  | "LimeConcrete"
+  | "PinkConcrete"
+  | "GrayConcrete"
+  | "LightGrayConcrete"
+  | "CyanConcrete"
+  | "PurpleConcrete"
+  | "BlueConcrete"
+  | "BrownConcrete"
+  | "GreenConcrete"
+  | "RedConcrete"
+  | "BlackConcrete"
+  | "LimeConcretePowder"
+  | "PinkConcretePowder"
+  | "GrayConcretePowder"
+  | "LightGrayConcretePowder"
+  | "CyanConcretePowder"
+  | "PurpleConcretePowder"
+  | "WaterBucket"
+  | "PurpleGlass"
+  | "BlueGlass"
+  | "GreenGlass"
+  | "RedGlass"
+  | "BlackGlass"
+  | "Lodestone"
+  | "Cotton"
+  | "Player"
+  | "Fragment"
+  | "AnyTerracotta";
 
 // Define the GameObject interface with optional descriptors
 interface GameObject {
   id: number;
   name: ObjectName;
   descriptors?: string[]; // Optional array of descriptors
+  mass?: bigint; // Optional mass property
+  energy?: bigint; // Optional energy property
 }
 
 // Define the objects array with descriptors for some objects
@@ -410,8 +498,88 @@ export const objects: GameObject[] = [
   { id: 296, name: "PurpleDye", descriptors: ["royal", "purple", "coloring"] },
   { id: 297, name: "MagentaDye", descriptors: ["vivid", "magenta", "coloring"] },
   { id: 298, name: "LightBlueDye", descriptors: ["pale", "blue", "coloring"] },
-  { id: 299, name: "LightGrayDye", descriptors: ["light", "gray", "coloring"] },
+  { id: 299, name: "LightGrayDye", descriptors: ["light", "gray", "coloring"], mass: 0n },
   { id: 318, name: "Glass", descriptors: ["transparent", "clear", "fragile"] },
+  { id: 319, name: "WhiteGlass", descriptors: ["white", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 320, name: "OrangeGlass", descriptors: ["orange", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 323, name: "YellowGlass", descriptors: ["yellow", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 325, name: "PinkGlass", descriptors: ["pink", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 329, name: "PurpleGlass", descriptors: ["purple", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 330, name: "BlueGlass", descriptors: ["blue", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 332, name: "GreenGlass", descriptors: ["green", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 333, name: "RedGlass", descriptors: ["red", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 334, name: "BlackGlass", descriptors: ["black", "transparent", "fragile"], mass: 4000000000000000n },
+  { id: 352, name: "WhiteConcretePowder", descriptors: ["white", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 353, name: "OrangeConcretePowder", descriptors: ["orange", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 354, name: "MagentaConcretePowder", descriptors: ["magenta", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 355, name: "LightBlueConcretePowder", descriptors: ["light blue", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 356, name: "YellowConcretePowder", descriptors: ["yellow", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 357, name: "LimeConcretePowder", descriptors: ["lime", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 358, name: "PinkConcretePowder", descriptors: ["pink", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 359, name: "GrayConcretePowder", descriptors: ["gray", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 360, name: "LightGrayConcretePowder", descriptors: ["light gray", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 361, name: "CyanConcretePowder", descriptors: ["cyan", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 362, name: "PurpleConcretePowder", descriptors: ["purple", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 363, name: "BlueConcretePowder", descriptors: ["blue", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 364, name: "BrownConcretePowder", descriptors: ["brown", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 365, name: "GreenConcretePowder", descriptors: ["green", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 366, name: "RedConcretePowder", descriptors: ["red", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 367, name: "BlackConcretePowder", descriptors: ["black", "powdery", "dry"], mass: 3200000000000000n },
+  { id: 368, name: "WhiteConcrete", descriptors: ["white", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 369, name: "OrangeConcrete", descriptors: ["orange", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 370, name: "MagentaConcrete", descriptors: ["magenta", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 371, name: "LightBlueConcrete", descriptors: ["light blue", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 372, name: "YellowConcrete", descriptors: ["yellow", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 373, name: "LimeConcrete", descriptors: ["lime", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 374, name: "PinkConcrete", descriptors: ["pink", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 375, name: "GrayConcrete", descriptors: ["gray", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 376, name: "LightGrayConcrete", descriptors: ["light gray", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 377, name: "CyanConcrete", descriptors: ["cyan", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 378, name: "PurpleConcrete", descriptors: ["purple", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 379, name: "BlueConcrete", descriptors: ["blue", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 380, name: "BrownConcrete", descriptors: ["brown", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 381, name: "GreenConcrete", descriptors: ["green", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 382, name: "RedConcrete", descriptors: ["red", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 383, name: "BlackConcrete", descriptors: ["black", "solid", "smooth"], mass: 3200000000000000n },
+  { id: 384, name: "Brick", descriptors: ["red", "fired", "rectangular"], mass: 2400000000000000n },
+  { id: 385, name: "BrickBlock", descriptors: ["red", "structured", "masonry"], mass: 9600000000000000n },
+  { id: 386, name: "MudBricks", descriptors: ["brown", "earthy", "rustic"], mass: 5000000000000000n },
+  { id: 387, name: "Paper", descriptors: ["white", "thin", "writable"], mass: 200000000000000n },
+  { id: 388, name: "Stick", descriptors: ["brown", "wooden", "straight"], mass: 2250000000000000n },
+  { id: 389, name: "Lodestone", descriptors: ["magnetic", "dark", "metallic"], mass: 771000000000000000n },
+  // Non blocks
+  { id: 32768, name: "WoodenPick", descriptors: ["wooden", "tool", "mining"], mass: 22500000000000000n },
+  { id: 32769, name: "CopperPick", descriptors: ["copper", "tool", "mining"], mass: 534000000000000000n },
+  { id: 32770, name: "IronPick", descriptors: ["iron", "tool", "mining"], mass: 2034000000000000000n },
+  { id: 32771, name: "GoldPick", descriptors: ["gold", "tool", "mining"], mass: 4809000000000000000n },
+  { id: 32772, name: "DiamondPick", descriptors: ["diamond", "tool", "mining"], mass: 15009000000000000000n },
+  { id: 32773, name: "NeptuniumPick", descriptors: ["neptunium", "tool", "mining"], mass: 16509000000000000000n },
+  { id: 32774, name: "WoodenAxe", descriptors: ["wooden", "tool", "chopping"], mass: 22500000000000000n },
+  { id: 32775, name: "CopperAxe", descriptors: ["copper", "tool", "chopping"], mass: 534000000000000000n },
+  { id: 32776, name: "IronAxe", descriptors: ["iron", "tool", "chopping"], mass: 2034000000000000000n },
+  { id: 32777, name: "GoldAxe", descriptors: ["gold", "tool", "chopping"], mass: 4809000000000000000n },
+  { id: 32778, name: "DiamondAxe", descriptors: ["diamond", "tool", "chopping"], mass: 15009000000000000000n },
+  { id: 32779, name: "NeptuniumAxe", descriptors: ["neptunium", "tool", "chopping"], mass: 16509000000000000000n },
+  { id: 32780, name: "WoodenWhacker", descriptors: ["wooden", "tool", "combat"], mass: 36000000000000000n },
+  { id: 32781, name: "CopperWhacker", descriptors: ["copper", "tool", "combat"], mass: 1059000000000000000n },
+  { id: 32782, name: "IronWhacker", descriptors: ["iron", "tool", "combat"], mass: 4059000000000000000n },
+  { id: 32783, name: "WoodenHoe", descriptors: ["wooden", "tool", "farming"], mass: 18000000000000000n },
+  { id: 32784, name: "GoldBar", descriptors: ["gold", "refined", "valuable"], mass: 1600000000000000000n },
+  { id: 32785, name: "IronBar", descriptors: ["iron", "refined", "metallic"], mass: 675000000000000000n },
+  { id: 32786, name: "Diamond", descriptors: ["diamond", "precious", "brilliant"], mass: 5000000000000000000n },
+  { id: 32787, name: "NeptuniumBar", descriptors: ["neptunium", "refined", "radioactive"], mass: 5500000000000000000n },
+  { id: 32788, name: "Bucket", descriptors: ["wooden", "container", "utility"], mass: 13500000000000000n },
+  { id: 32789, name: "WaterBucket", descriptors: ["wooden", "container", "filled"], mass: 13500000000000000n },
+  { id: 32790, name: "WheatSlop", descriptors: ["food", "nutritious", "grain"], energy: 68800000000000000n },
+  { id: 32791, name: "PumpkinSoup", descriptors: ["food", "warm", "orange"], energy: 34300000000000000n },
+  { id: 32792, name: "MelonSmoothie", descriptors: ["food", "refreshing", "sweet"], energy: 34300000000000000n },
+  { id: 32793, name: "Battery", descriptors: ["energy", "power", "fuel"], energy: 90000000000000000n },
+  { id: 32794, name: "AnyLog", descriptors: ["wood", "natural", "fuel"], mass: 12500000000000000n, energy: 5500000000000000n },
+  { id: 32795, name: "AnyPlank", descriptors: ["wood", "processed", "building"], mass: 4500000000000000n },
+  { id: 32796, name: "AnyTerracotta", descriptors: ["clay", "fired", "decorative"], mass: 37500000000000000n },
+  { id: 32797, name: "AnyLeaf", descriptors: ["plant", "organic", "fuel"], mass: 500000000000000n, energy: 500000000000000n },
+  { id: 32798, name: "Player", descriptors: ["entity", "character", "living"] },
+  { id: 32799, name: "Fragment", descriptors: ["broken", "piece", "remnant"] },
 ];
 
 // Create the objectNamesById mapping
@@ -430,6 +598,15 @@ export const objectDescriptorsById: Record<number, string[] | undefined> = objec
     return acc;
   },
   {} as Record<number, string[] | undefined>,
+);
+
+// Create the objectsByName mapping
+export const objectsByName: Record<ObjectName, GameObject> = objects.reduce(
+  (acc, obj) => {
+    acc[obj.name] = obj;
+    return acc;
+  },
+  {} as Record<ObjectName, GameObject>,
 );
 
 // Utility function to get a random descriptor for a given block ID

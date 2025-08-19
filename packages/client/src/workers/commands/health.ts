@@ -4,6 +4,8 @@ const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const ENERGY_TABLE = "Energy";
 
+const SPAWN_ENERGY = 245280000000000000n; // Energy at spawn
+
 const encodePlayerEntityId = (address: string): `0x${string}` => {
   const prefix = "01";
   const cleanAddress = address.toLowerCase().replace(/^0x/, "");
@@ -45,8 +47,11 @@ export class HealthCommand implements CommandHandler {
       const drainRate = BigInt(row.drainRate ?? 0);
       const lastUpdatedTime = BigInt(row.lastUpdatedTime ?? 0);
 
+      // Calculate percentage of spawn energy (can exceed 100%)
+      const percentage = Number((energy * 100n) / SPAWN_ENERGY);
+
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `❤️ Energy: ${energy.toString()}, 💧 Drain Rate: ${drainRate.toString()}, ⏱️ Last Updated: ${lastUpdatedTime.toString()}` 
+        detail: `❤️ Energy: ${energy.toString()} (${percentage.toFixed(1)}%), 💧 Drain Rate: ${drainRate.toString()}, ⏱️ Last Updated: ${lastUpdatedTime.toString()}` 
       }));
     } catch (error) {
       window.dispatchEvent(new CustomEvent("worker-log", { 
@@ -55,6 +60,8 @@ export class HealthCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

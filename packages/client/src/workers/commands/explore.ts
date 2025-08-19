@@ -9,6 +9,14 @@ const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const POSITION_TABLE = "EntityPosition";
 const ORIENTATION_TABLE = "EntityOrientation";
 
+// Column width for explore formatting
+const COL_CH = 18; // width of each column in monospace "characters"
+
+/** wrap any text in a fixed-width cell */
+function cell(text: string) {
+  return `<span class="explore-cell" style="display:inline-block;width:${COL_CH}ch;vertical-align:top;">${text}</span>`;
+}
+
 const publicClient = createPublicClient({
   chain: redstone,
   transport: http(),
@@ -60,6 +68,66 @@ async function scanVerticalColumn(x: number, y: number, z: number): Promise<stri
   }
 
   return names;
+}
+
+// Add interface for block selection
+interface SelectableBlock {
+  x: number;
+  y: number;
+  z: number;
+  name: string;
+  distance?: number;
+  layer: number;
+}
+
+let selectedBlocks: SelectableBlock[] = [];
+let isSelectionMode = false;
+
+function createClickableBlock(block: SelectableBlock): string {
+  if (block.name === "Air" || block.name === "Empty") {
+    return cell(block.name);
+  }
+
+  const blockId = `block-${block.x}-${block.y}-${block.z}`;
+  const link = `<span class="clickable-block"
+      data-block='${JSON.stringify(block)}'
+      data-id="${blockId}"
+      style="text-decoration: underline; cursor: pointer; color: #3b82f6;"
+    >${block.name}</span>`;
+
+  return cell(link);
+}
+
+function handleBlockClick(event: Event) {
+  const customEvent = event as CustomEvent;
+  const blockData = JSON.parse(customEvent.detail.blockData);
+  
+  if (selectedBlocks.find(b => b.x === blockData.x && b.y === blockData.y && b.z === blockData.z)) {
+    // Remove if already selected
+    selectedBlocks = selectedBlocks.filter(b => !(b.x === blockData.x && b.y === blockData.y && b.z === blockData.z));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: `❌ Removed ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) from mining queue. ${selectedBlocks.length} blocks queued.` 
+    }));
+  } else {
+    // Add to selection
+    selectedBlocks.push(blockData);
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: `✅ Added ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) to mining queue. ${selectedBlocks.length} blocks queued.` 
+    }));
+  }
+  
+  if (selectedBlocks.length > 0 && !isSelectionMode) {
+    isSelectionMode = true;
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: `💡 Type 'done' when you have selected all desired blocks to mine.` 
+    }));
+  }
+}
+
+// Listen for block clicks - use a flag to prevent multiple registrations
+if (typeof window !== 'undefined' && !(window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered) {
+  window.addEventListener('block-click', handleBlockClick);
+  (window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered = true;
 }
 
 export class ExploreCommand implements CommandHandler {
@@ -150,20 +218,34 @@ export class ExploreCommand implements CommandHandler {
           });
         }
 
-        // Format as columns
+        // Format as columns with clickable blocks
         const header = `Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}):\n\n`;
-        const coordLine = columns.map(col => `Block ${col.distance}`.padEnd(15)).join(" ");
-        const posLine = columns.map(col => col.coord.padEnd(15)).join(" ");
-        
-        const layerLines = [];
+
+        // use fixed-width cells instead of padEnd/spaces
+        const coordLine = columns.map(col => cell(`Block ${col.distance}`)).join(" ");
+        const posLine   = columns.map(col => cell(col.coord)).join(" ");
+
+        const layerLines: string[] = [];
         for (let i = 0; i < layers.length; i++) {
           const dy = layers[i];
-          const line = columns.map(col => col.blocks[i].padEnd(15)).join(" ");
-          layerLines.push(`${dy >= 0 ? "+" : ""}${dy}: ${line}`);
+          const blockCells = columns.map((col) => {
+            const blockData: SelectableBlock = {
+              x: x + (dx * col.distance),
+              y: y + dy,
+              z: z + (dz * col.distance),
+              name: col.blocks[i],
+              distance: col.distance,
+              layer: dy
+            };
+            return createClickableBlock(blockData); // already returns a fixed-width cell
+          });
+
+          // add space between columns for alignment
+          layerLines.push(`${dy >= 0 ? "+" : ""}${dy}: ${blockCells.join(" ")}`);
         }
 
-        const msg = header + coordLine + "\n" + posLine + "\n" + layerLines.join("\n");
-        
+        const msg = `<pre class="explore-output">${header}${coordLine}\n${posLine}\n${layerLines.join("\n")}</pre>`;
+
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: msg 
         }));
@@ -177,10 +259,27 @@ export class ExploreCommand implements CommandHandler {
           const tx = x + dx;
           const tz = z + dz;
           const column = await scanVerticalColumn(tx, y, tz);
-          report.push(`\n${dir.toUpperCase()} at (${tx}, ${y}, ${tz}):\n${column.map(l => "  " + l).join("\n")}`);
+          
+          // Make blocks clickable in the column
+          const clickableColumn = column.map((line, index) => {
+            const dy = [2, 1, 0, -1, -2][index];
+            const blockName = line.split(': ')[1];
+            const blockData: SelectableBlock = {
+              x: tx,
+              y: y + dy,
+              z: tz,
+              name: blockName,
+              layer: dy
+            };
+            const prefix = line.split(': ')[0];
+            const clickableBlock = createClickableBlock(blockData);
+            return `${prefix}: ${clickableBlock}`;
+          });
+          
+          report.push(`\n${dir.toUpperCase()} at (${tx}, ${y}, ${tz}):\n${clickableColumn.map(l => "  " + l).join("\n")}`);
         }
 
-        const msg = `You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).${report.join("\n")}`;
+        const msg = `<pre class="explore-output">You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).${report.join("\n")}</pre>`;
         
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: msg 
@@ -193,6 +292,17 @@ export class ExploreCommand implements CommandHandler {
     }
   }
 }
+
+// Export functions for done command
+export { selectedBlocks };
+export function clearSelection() {
+  selectedBlocks.splice(0, selectedBlocks.length); // Clear array completely
+  isSelectionMode = false;
+  console.log('Selection cleared, selectedBlocks length:', selectedBlocks.length);
+}
+
+
+
 
 
 

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef } from "react";
 import { useAccount, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 import { chainId, getWorldAddress } from "./common";
-import "./app.css";
+import "tailwindcss/tailwind.css";
+import "./app.css"; // Add this import for the clickable block styles
 
 declare global {
   interface Window {
@@ -164,16 +165,29 @@ export function App() {
     } else if (command.startsWith('explore ')) {
       const direction = command.split(' ')[1];
       runCommand(`explore ${direction}`);
+    } else if (command === 'survey') {
+      runCommand('survey');
+    } else if (command === 'done') {
+      runCommand('done');
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
-    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw'].includes(command)) {
+    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
       const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
       console.log(`Move command: ${direction}, Address: ${address}`);
       runCommand(`move ${direction}`);
     } else if (command.startsWith('mine ') || command === 'mine') {
-      runCommand('mine');
+      const target = command.startsWith('mine ') ? command.split(' ')[1] : undefined;
+      runCommand(`mine${target ? ` ${target}` : ''}`);
     } else if (command === 'inventory' || command === 'inv' || command === 'i') {
       runCommand('inventory');
+    } else if (command.startsWith('craft ')) {
+      const itemName = command.substring(6); // Remove 'craft ' prefix
+      runCommand(`craft ${itemName}`);
+    } else if (command.startsWith('equip ')) {
+      const toolName = command.substring(6); // Remove 'equip ' prefix
+      runCommand(`equip ${toolName}`);
+    } else if (command === 'unequip') {
+      runCommand('unequip');
     } else if (command.startsWith("'")) {
       // Handle speak command directly - remove the leading quote
       const message = command.substring(1);
@@ -227,7 +241,32 @@ export function App() {
       setTimeout(() => {
         terminal.scrollTop = terminal.scrollHeight;
       }, 0);
+
+      // Add click handler for clickable blocks
+      const handleClick = (event: Event) => {
+        const target = event.target as HTMLElement;
+        if (target.classList.contains('clickable-block')) {
+          const blockData = target.getAttribute('data-block');
+          const blockId = target.getAttribute('data-id');
+          
+          if (blockData && blockId) {
+            window.dispatchEvent(new CustomEvent('block-click', {
+              detail: { blockData, blockId }
+            }));
+          }
+        }
+      };
+
+      terminal.addEventListener('click', handleClick);
+      
+      return () => {
+        terminal.removeEventListener('click', handleClick);
+      };
     }
+  }, [log]);
+
+  useEffect(() => {
+    console.log('Latest log entry:', log[log.length - 1]);
   }, [log]);
 
   return (
@@ -254,7 +293,10 @@ export function App() {
             className="terminal"
           >
             {log.map((line, i) => (
-              <div key={i}>{line}</div>
+              <div 
+                key={i} 
+                dangerouslySetInnerHTML={{ __html: line }}
+              />
             ))}
           </div>
           

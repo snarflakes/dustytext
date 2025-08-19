@@ -185,3 +185,59 @@ button[data-testid*="connect"]:hover {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Clickable block styling */
+.clickable-block {
+  text-decoration: underline !important;
+  font-weight: bold !important;
+  cursor: pointer !important;
+  color: #3b82f6 !important;
+  transition: color 0.2s ease !important;
+  padding: 1px 2px !important;
+  border-radius: 2px !important;
+}
+
+.clickable-block:hover {
+  color: #1d4ed8 !important;
+  background-color: rgba(59, 130, 246, 0.1) !important;
+}
+
+.clickable-block:active {
+  color: #1e40af !important;
+  background-color: rgba(59, 130, 246, 0.2) !important;
+}
+
+/* Terminal styling to ensure HTML renders properly */
+.terminal {
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* Explore command output formatting */
+.explore-output {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  white-space: pre;            /* keep newlines/spaces */
+}
+
+.explore-cell { 
+  display: inline-block; 
+  vertical-align: top; 
+}
+
+.clickable-block { 
+  text-decoration: underline; 
+  font-weight: normal; 
+  cursor: pointer; 
+}
+
+/* Terminal styling to ensure HTML renders properly */
+.terminal {
+  font-family: 'Courier New', monospace;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+
+
+

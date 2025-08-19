@@ -7,6 +7,10 @@ const MOVE_ABI = parseAbi([
   'function moveDirections(bytes32 caller, uint8[] directions)',
 ]);
 
+const MOVE_PACKED_ABI = parseAbi([
+  'function moveDirectionsPacked(bytes32 caller, bytes packedDirections)',
+]);
+
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const POSITION_TABLE = "EntityPosition";
 
@@ -40,18 +44,71 @@ async function getPlayerPosition(entityId: string): Promise<{x: number, y: numbe
 }
 
 const directionToEnum: Record<string, number> = {
-  north: 5, n: 5, // Try West enum for North (Z movement)
-  east: 0, e: 0,  // North enum moves east (X+) - keep
-  south: 4, s: 4, // South enum for South (Z movement)  
-  west: 1, w: 1,  // East enum moves west (X-) - keep
+  north: 5, n: 5,
+  east: 0, e: 0,
+  south: 4, s: 4,
+  west: 1, w: 1,
+  up: 2, u: 2,
+  down: 3, d: 3,
 };
 
 const diagonalDirections: Record<string, number[]> = {
-  northeast: [5, 0], ne: [5, 0], // North, then East
-  northwest: [5, 1], nw: [5, 1], // North, then West
-  southeast: [4, 0], se: [4, 0], // South, then East
-  southwest: [4, 1], sw: [4, 1], // South, then West
+  northeast: [5, 0], ne: [5, 0],
+  northwest: [5, 1], nw: [5, 1],
+  southeast: [4, 0], se: [4, 0],
+  southwest: [4, 1], sw: [4, 1],
 };
+
+type DirectionCode = 0 | 1 | 2 | 3 | 4 | 5;
+const D = { East: 0, West: 1, Up: 2, Down: 3, South: 4, North: 5 } as const;
+
+function packDirections(dirs: DirectionCode[]): `0x${string}` {
+  const hex = dirs.map(d => d.toString(16).padStart(2, '0')).join('');
+  return `0x${hex}` as `0x${string}`;
+}
+
+async function trySmartMove(
+  context: CommandContext, 
+  entityId: `0x${string}`, 
+  primaryDirection: DirectionCode,
+  directionName: string
+): Promise<{ txHash: string; message: string }> {
+  const plans = [
+    { dirs: [primaryDirection], desc: directionName },
+    { dirs: [D.Down, primaryDirection], desc: `down then ${directionName}` },
+    { dirs: [D.Up, primaryDirection], desc: `up then ${directionName}` },
+    { dirs: [D.Up, D.Up, primaryDirection], desc: `up twice then ${directionName}` }
+  ];
+
+  for (const plan of plans) {
+    try {
+      console.log(`Trying smart move plan: ${plan.desc}, directions: ${plan.dirs}`);
+      const data = encodeFunctionData({
+        abi: MOVE_ABI,
+        functionName: 'moveDirections',
+        args: [entityId, plan.dirs],
+      });
+
+      const txHash = await context.sessionClient.sendTransaction({
+        to: WORLD_ADDRESS,
+        data,
+        gas: 100000n,
+      });
+
+      console.log(`Smart move plan succeeded: ${plan.desc}`);
+      return { txHash, message: plan.desc };
+    } catch (error) {
+      const errorStr = String(error);
+      console.log(`Smart move plan failed: ${plan.desc}, error: ${errorStr}`);
+      if (!errorStr.includes('reverted during simulation')) {
+        throw error;
+      }
+      // Continue to next plan if simulation reverted
+    }
+  }
+
+  throw new Error('All movement plans failed');
+}
 
 export class MoveCommand implements CommandHandler {
   async execute(context: CommandContext, direction: string): Promise<void> {
@@ -72,21 +129,48 @@ export class MoveCommand implements CommandHandler {
       }
 
       const entityId = encodePlayerEntityId(context.address);
-      
-      // Get position before move
       const beforePos = await getPlayerPosition(entityId);
 
-      const data = encodeFunctionData({
-        abi: MOVE_ABI,
-        functionName: 'moveDirections',
-        args: [entityId, directionEnums],
-      });
+      // Try smart move for horizontal directions only (exclude Up=2 and Down=3)
+      const useSmartMove = directionEnums.length === 1 && 
+        [0, 1, 4, 5].includes(directionEnums[0]);
 
-      const txHash = await context.sessionClient.sendTransaction({
-        to: WORLD_ADDRESS,
-        data,
-        gas: 100000n,
-      });
+      let txHash: string;
+      let moveDescription = direction;
+
+      if (useSmartMove) {
+        try {
+          const result = await trySmartMove(context, entityId, directionEnums[0] as DirectionCode, direction);
+          txHash = result.txHash;
+          moveDescription = result.message;
+        } catch (smartMoveError) {
+          // Fall back to regular move if smart move fails
+          const data = encodeFunctionData({
+            abi: MOVE_ABI,
+            functionName: 'moveDirections',
+            args: [entityId, directionEnums],
+          });
+
+          txHash = await context.sessionClient.sendTransaction({
+            to: WORLD_ADDRESS,
+            data,
+            gas: 100000n,
+          });
+        }
+      } else {
+        // Regular move for up/down/diagonal - no smart move needed
+        const data = encodeFunctionData({
+          abi: MOVE_ABI,
+          functionName: 'moveDirections',
+          args: [entityId, directionEnums],
+        });
+
+        txHash = await context.sessionClient.sendTransaction({
+          to: WORLD_ADDRESS,
+          data,
+          gas: 100000n,
+        });
+      }
       
       // Wait for indexer to update
       await new Promise(resolve => setTimeout(resolve, 2000));
@@ -110,10 +194,10 @@ export class MoveCommand implements CommandHandler {
       }
 
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `✅ Move ${direction} completed${elevationMessage}. Tx: ${txHash}` 
+        detail: `✅ Move ${moveDescription} completed${elevationMessage}. Tx: ${txHash}` 
       }));
 
-      // Automatically look after successful move (no additional delay needed)
+      // Automatically look after successful move
       const { getCommand } = await import('./registry');
       const lookCommand = getCommand('look');
       if (lookCommand) {
@@ -140,7 +224,8 @@ export class MoveCommand implements CommandHandler {
       }
       
       // Check for simulation revert error (blocked path)
-      if (errorMessage.includes('reverted during simulation with reason: 0xbeb9cbe')) {
+      if (errorMessage.includes('reverted during simulation with reason: 0xbeb9cbe') ||
+          errorMessage.includes('reverted during simulation with reason: 0xfdde54e2e15f95e5')) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `❌ Something blocks your way. --Explore-- to see what is stopping you.` 
         }));
@@ -153,11 +238,6 @@ export class MoveCommand implements CommandHandler {
         }
         return;
       }
-      
-      // For debugging - comment out to hide full error details
-      // window.dispatchEvent(new CustomEvent("worker-log", { 
-      //   detail: `❌ Move failed: ${error}` 
-      // }));
       
       // Generic error message
       window.dispatchEvent(new CustomEvent("worker-log", { 

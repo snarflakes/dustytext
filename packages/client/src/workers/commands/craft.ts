@@ -158,9 +158,18 @@ export class CraftCommand implements CommandHandler {
         let remainingNeeded = requiredAmount;
         console.log(`Looking for ${requiredAmount} ${requiredType}`);
         
+        // Handle "Any" types by checking for specific variants
+        const typesToCheck = requiredType === "AnyPlank" 
+          ? ["OakPlanks", "BirchPlanks", "JunglePlanks", "SakuraPlanks", "AcaciaPlanks", "SprucePlanks", "DarkOakPlanks", "MangrovePlanks"]
+          : requiredType === "AnyLog"
+          ? ["OakLog", "BirchLog", "JungleLog", "SakuraLog", "AcaciaLog", "SpruceLog", "DarkOakLog", "MangroveLog"]
+          : requiredType === "AnyLeaf"
+          ? ["OakLeaf", "BirchLeaf", "JungleLeaf", "SakuraLeaf", "AcaciaLeaf", "SpruceLeaf", "DarkOakLeaf", "MangroveLeaf"]
+          : [requiredType];
+        
         for (const item of inventory) {
           console.log(`Checking item: ${item.objectType} (${item.amount}) vs ${requiredType}`);
-          if (item.objectType === requiredType && remainingNeeded > 0) {
+          if (typesToCheck.includes(item.objectType) && remainingNeeded > 0) {
             const useAmount = Math.min(item.amount, remainingNeeded);
             inputSlots.push({ slot: item.slot, amount: useAmount });
             remainingNeeded -= useAmount;
@@ -214,45 +223,4 @@ export class CraftCommand implements CommandHandler {
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

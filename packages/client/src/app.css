@@ -238,6 +238,15 @@ button[data-testid*="connect"]:hover {
   word-wrap: break-word;
 }
 
+/* Speak command styling - more specific selectors */
+.terminal .speak-prefix {
+  color: white !important;
+  font-family: 'Courier New', monospace !important;
+}
 
+.terminal .speak-message {
+  color: #00ff00 !important;
+  font-family: 'Courier New', monospace !important;
+}
 
 

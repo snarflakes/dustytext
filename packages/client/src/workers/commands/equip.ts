@@ -7,6 +7,7 @@ const INVENTORY_SLOT_TABLE = "InventorySlot";
 // Import OBJECT_TYPES from the correct location
 const OBJECT_TYPES: Record<number, string> = {
   21: "Grass",
+  51: "BirchLog",
   56: "DarkOakLog", 
   58: "OakLeaf",
   83: "SwitchGrass",
@@ -26,6 +27,8 @@ const OBJECT_TYPES: Record<number, string> = {
   32771: "GoldPick",
   32772: "DiamondPick",
   32773: "NeptuniumPick",
+  32783: "WoodenHoe",
+  32788: "Bucket",
   // Add more as needed
 };
 
@@ -130,6 +133,7 @@ export class EquipCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

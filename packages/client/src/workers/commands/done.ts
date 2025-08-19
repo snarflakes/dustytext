@@ -44,9 +44,8 @@ export class DoneCommand implements CommandHandler {
     }
 
     clearSelection();
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `✅ Completed mining ${selectedBlocks.length} blocks!` 
-    }));
+    // Removed redundant completion message since individual mining operations already show success
   }
 }
+
 

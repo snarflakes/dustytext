@@ -183,6 +183,11 @@ export function App() {
     } else if (command.startsWith('craft ')) {
       const itemName = command.substring(6); // Remove 'craft ' prefix
       runCommand(`craft ${itemName}`);
+    } else if (command.startsWith('equip ')) {
+      const toolName = command.substring(6); // Remove 'equip ' prefix
+      runCommand(`equip ${toolName}`);
+    } else if (command === 'unequip') {
+      runCommand('unequip');
     } else if (command.startsWith("'")) {
       // Handle speak command directly - remove the leading quote
       const message = command.substring(1);

@@ -155,20 +155,26 @@ export class MineCommand implements CommandHandler {
         console.log('Mine command - entityId:', entityId);
         console.log('Mine command - packed coord:', packedCoord.toString(16));
 
+        // Check for equipped tool
+        const equippedTool = (globalThis as typeof globalThis & { equippedTool: { slot: number; type: string; name: string } | null }).equippedTool;
+        const selectedToolSlot = equippedTool ? equippedTool.slot : 0;
+        const hasToolEquipped = !!equippedTool;
+
         // Use the new mining function with tool support
         const txHash = await mineWithOptionalTool(context.sessionClient, WORLD_ADDRESS, {
           caller: entityId,
           packedCoord,
-          selectedToolSlot: 0,
-          hasToolEquipped: false,
+          selectedToolSlot,
+          hasToolEquipped,
           extraData: '0x',
           gas: 300000n,
         });
 
         const targetText = coords ? ` at (${mineX}, ${mineY}, ${mineZ})` : (target === 'down' ? ' down' : (target ? ` ${target}` : ''));
         const positionText = `(${mineX}, ${mineY}, ${mineZ})`;
+        const toolText = hasToolEquipped ? ` using ${equippedTool.type}` : '';
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `✅ Mining${targetText} completed at ${positionText}. Tx: ${txHash}` 
+          detail: `✅ Mining${targetText} completed at ${positionText}${toolText}. Tx: ${txHash}` 
         }));
 
         // Auto-look after mining
@@ -257,6 +263,8 @@ export class MineCommand implements CommandHandler {
     return { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
   }
 }
+
+
 
 
 

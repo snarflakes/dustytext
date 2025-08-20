@@ -10,7 +10,7 @@ const POSITION_TABLE = "EntityPosition";
 const ORIENTATION_TABLE = "EntityOrientation";
 
 // Column width for explore formatting
-const COL_CH = 18; // width of each column in monospace "characters"
+const COL_CH = 27; // width of each column in monospace "characters" (increased from 18)
 
 /** wrap any text in a fixed-width cell */
 function cell(text: string) {
@@ -40,34 +40,6 @@ function getOffsetForDirection(direction: string): [number, number] {
     case "southwest": case "sw": return [-1, 1];
     default: return [0, 0];
   }
-}
-
-async function scanVerticalColumn(x: number, y: number, z: number): Promise<string[]> {
-  const layers: number[] = [2, 1, 0, -1, -2];
-  const names: string[] = [];
-
-  for (const dy of layers) {
-    const pos = [x, y + dy, z] as [number, number, number];
-    try {
-      const type = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, pos);
-      let name = typeof type === "number" ? objectNamesById[type] ?? `Unknown(${type})` : "Empty";
-      
-      // Add capitalized descriptor in front for flowers and mushrooms
-      if (typeof type === "number") {
-        const descriptor = getFlowerDescriptor(type);
-        if (descriptor) {
-          const capitalizedDescriptor = descriptor.charAt(0).toUpperCase() + descriptor.slice(1);
-          name = `${capitalizedDescriptor} ${name}`;
-        }
-      }
-      
-      names.push(`${dy >= 0 ? "+" : ""}${dy}: ${name}`);
-    } catch {
-      names.push(`${dy >= 0 ? "+" : ""}${dy}: [error]`);
-    }
-  }
-
-  return names;
 }
 
 // Add interface for block selection
@@ -201,7 +173,7 @@ export class ExploreCommand implements CommandHandler {
                 const descriptor = getFlowerDescriptor(type);
                 if (descriptor) {
                   const capitalizedDescriptor = descriptor.charAt(0).toUpperCase() + descriptor.slice(1);
-                  name = `${capitalizedDescriptor} ${name}`;
+                  name = `${capitalizedDescriptor} ${name}` as string;
                 }
               }
               
@@ -250,36 +222,85 @@ export class ExploreCommand implements CommandHandler {
           detail: msg 
         }));
       } else {
-        // Original explore behavior (all 4 directions around player)
-        const directions = ["north", "east", "south", "west"] as const;
+        // Original explore behavior - now as 3x3 grid of directional columns laid out horizontally
+        const layers = [2, 1, 0, -1, -2];
+        const directions = [
+          [
+            { label: "NW", dx: -1, dz: -1 },
+            { label: "N", dx: 0, dz: -1 },
+            { label: "NE", dx: 1, dz: -1 }
+          ],
+          [
+            { label: "W", dx: -1, dz: 0 },
+            { label: "YOU", dx: 0, dz: 0 },
+            { label: "E", dx: 1, dz: 0 }
+          ],
+          [
+            { label: "SW", dx: -1, dz: 1 },
+            { label: "S", dx: 0, dz: 1 },
+            { label: "SE", dx: 1, dz: 1 }
+          ]
+        ];
+
         const report: string[] = [];
 
-        for (const dir of directions) {
-          const [dx, dz] = getOffsetForDirection(dir);
-          const tx = x + dx;
-          const tz = z + dz;
-          const column = await scanVerticalColumn(tx, y, tz);
+        for (const row of directions) {
+          // Create header line with direction labels
+          const headerLine = row.map(dir => {
+            const tx = x + dir.dx;
+            const tz = z + dir.dz;
+            const arrow = {
+              "NW": "<b>↖</b>", "N": "<b>↑</b>", "NE": "<b>↗</b>",
+              "W": "<b>←</b>", "YOU": "<b>●</b>", "E": "<b>→</b>", 
+              "SW": "<b>↙</b>", "S": "<b>↓</b>", "SE": "<b>↘</b>"
+            }[dir.label] || "<b>●</b>";
+            return cell(`${arrow}${dir.label} at (${tx}, ${y}, ${tz})`);
+          }).join(" ");
+
+          // Create lines for each layer
+          const layerLines: string[] = [];
+          for (const dy of layers) {
+            const blockCells = await Promise.all(row.map(async dir => {
+              const tx = x + dir.dx;
+              const tz = z + dir.dz;
+              const currentY = y + dy;
+              
+              try {
+                const pos = [tx, currentY, tz] as [number, number, number];
+                const type = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, pos);
+                let name: string = typeof type === "number" ? objectNamesById[type] ?? `Unknown(${type})` : "Air";
+                
+                if (typeof type === "number") {
+                  const descriptor = getFlowerDescriptor(type);
+                  if (descriptor) {
+                    const capitalizedDescriptor = descriptor.charAt(0).toUpperCase() + descriptor.slice(1);
+                    name = `${capitalizedDescriptor} ${name}`;
+                  }
+                }
+                
+                const blockData: SelectableBlock = {
+                  x: tx,
+                  y: currentY,
+                  z: tz,
+                  name: name,
+                  layer: dy
+                };
+                
+                const clickableBlock = createClickableBlock(blockData);
+                const prefix = (dir.label === "YOU" && (dy === 0 || dy === 1)) ? "YOU:" : "";
+                return cell(`${dy >= 0 ? "+" : ""}${dy}: ${prefix}${clickableBlock}`);
+              } catch {
+                return cell(`${dy >= 0 ? "+" : ""}${dy}: [error]`);
+              }
+            }));
+            
+            layerLines.push(blockCells.join(" "));
+          }
           
-          // Make blocks clickable in the column
-          const clickableColumn = column.map((line, index) => {
-            const dy = [2, 1, 0, -1, -2][index];
-            const blockName = line.split(': ')[1];
-            const blockData: SelectableBlock = {
-              x: tx,
-              y: y + dy,
-              z: tz,
-              name: blockName,
-              layer: dy
-            };
-            const prefix = line.split(': ')[0];
-            const clickableBlock = createClickableBlock(blockData);
-            return `${prefix}: ${clickableBlock}`;
-          });
-          
-          report.push(`\n${dir.toUpperCase()} at (${tx}, ${y}, ${tz}):\n${clickableColumn.map(l => "  " + l).join("\n")}`);
+          report.push(`${headerLine}\n${layerLines.join("\n")}`);
         }
 
-        const msg = `<pre class="explore-output">You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).${report.join("\n")}</pre>`;
+        const msg = `<pre class="explore-output">You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).\n\n${report.join("\n\n")}</pre>`;
         
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: msg 
@@ -300,6 +321,27 @@ export function clearSelection() {
   isSelectionMode = false;
   console.log('Selection cleared, selectedBlocks length:', selectedBlocks.length);
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

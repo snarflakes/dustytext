@@ -65,7 +65,7 @@ export class SpawnCommand implements CommandHandler {
         });
 
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `You blink into existence... born unto a blockchain. You are now in the matrix. ✅ Spawn completed: ${txHash}` 
+          detail: `You blink into existence... born unto a blockchain. You are now in the matrix. Now type "look" or "help" to guide you.✅ Spawn completed: ${txHash}` 
         }));
         return;
         

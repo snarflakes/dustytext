@@ -1,18 +1,51 @@
-import { createPublicClient, http, type PublicClient } from "viem";
+import { createPublicClient, http, type PublicClient, toHex } from "viem";
 import { redstone } from "viem/chains";
 import { getTerrainBlockType } from "../../terrain";
 import { objectNamesById, getFlowerDescriptor } from "../../objects";
-import { CommandHandler, CommandContext } from './types';
+import { CommandHandler, CommandContext } from "./types";
 
+// -----------------------------------------------------------------------------
+// Self-contained encodeBlock (no @dust/world/internal)
+// -----------------------------------------------------------------------------
+type Vec3 = [number, number, number];
+
+const BYTES_32_BITS = 256n;
+const ENTITY_TYPE_BITS = 8n;
+const ENTITY_ID_BITS = BYTES_32_BITS - ENTITY_TYPE_BITS; // 248
+const VEC3_BITS = 96n;
+const ENTITY_TYPE_BLOCK = 0x03; // matches EntityTypes.Block
+
+function toU32(n: number): bigint {
+  return BigInt.asUintN(32, BigInt(n)); // two's complement pack for int32
+}
+function packVec3([x, y, z]: Vec3): bigint {
+  const X = toU32(x), Y = toU32(y), Z = toU32(z);
+  return (X << 64n) | (Y << 32n) | Z; // 96 bits
+}
+function encode(entityType: number, data: bigint): `0x${string}` {
+  return toHex((BigInt(entityType) << ENTITY_ID_BITS) | data, { size: 32 }) as `0x${string}`;
+}
+function encodeCoord(entityType: number, coord: Vec3): `0x${string}` {
+  const packed = packVec3(coord);
+  return encode(entityType, packed << (ENTITY_ID_BITS - VEC3_BITS));
+}
+function encodeBlock(pos: Vec3): `0x${string}` {
+  return encodeCoord(ENTITY_TYPE_BLOCK, pos);
+}
+
+// -----------------------------------------------------------------------------
+// Constants / client
+// -----------------------------------------------------------------------------
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const POSITION_TABLE = "EntityPosition";
 const ORIENTATION_TABLE = "EntityOrientation";
 
-// Column width for explore formatting
-const COL_CH = 27; // width of each column in monospace "characters" (increased from 18)
+// If you know the tableId, you can hardcode it here and skip indexer discovery:
+const ENTITY_OBJECT_TYPE_TABLE_ID_OVERRIDE = "0x74620000000000000000000000000000456e746974794f626a65637454797065" as `0x${string}`;
+//const ENTITY_OBJECT_TYPE_TABLE_ID_OVERRIDE: `0x${string}` | undefined = undefined;
 
-/** wrap any text in a fixed-width cell */
+const COL_CH = 27;
 function cell(text: string) {
   return `<span class="explore-cell" style="display:inline-block;width:${COL_CH}ch;vertical-align:top;">${text}</span>`;
 }
@@ -20,6 +53,7 @@ function cell(text: string) {
 const publicClient = createPublicClient({
   chain: redstone,
   transport: http(),
+//  batch: { jsonRpc: { wait: 10 } }, // optional micro-batching
 });
 
 function encodePlayerEntityId(address: string): `0x${string}` {
@@ -31,9 +65,9 @@ function encodePlayerEntityId(address: string): `0x${string}` {
 function getOffsetForDirection(direction: string): [number, number] {
   switch (direction) {
     case "north": case "n": return [0, -1];
-    case "east": case "e": return [1, 0];
+    case "east":  case "e": return [1, 0];
     case "south": case "s": return [0, 1];
-    case "west": case "w": return [-1, 0];
+    case "west":  case "w": return [-1, 0];
     case "northeast": case "ne": return [1, -1];
     case "northwest": case "nw": return [-1, -1];
     case "southeast": case "se": return [1, 1];
@@ -42,274 +76,291 @@ function getOffsetForDirection(direction: string): [number, number] {
   }
 }
 
-// Add interface for block selection
+// -----------------------------------------------------------------------------
+// Selection UI (unchanged)
+// -----------------------------------------------------------------------------
 interface SelectableBlock {
-  x: number;
-  y: number;
-  z: number;
+  x: number; y: number; z: number;
   name: string;
   distance?: number;
   layer: number;
 }
-
 let selectedBlocks: SelectableBlock[] = [];
 let isSelectionMode = false;
 
 function createClickableBlock(block: SelectableBlock): string {
-  if (block.name === "Air" || block.name === "Empty") {
-    return cell(block.name);
-  }
-
+  if (block.name === "Air" || block.name === "Empty") return cell(block.name);
   const blockId = `block-${block.x}-${block.y}-${block.z}`;
   const link = `<span class="clickable-block"
       data-block='${JSON.stringify(block)}'
       data-id="${blockId}"
       style="text-decoration: underline; cursor: pointer; color: #3b82f6;"
     >${block.name}</span>`;
-
   return cell(link);
 }
 
 function handleBlockClick(event: Event) {
   const customEvent = event as CustomEvent;
   const blockData = JSON.parse(customEvent.detail.blockData);
-  
-  if (selectedBlocks.find(b => b.x === blockData.x && b.y === blockData.y && b.z === blockData.z)) {
-    // Remove if already selected
-    selectedBlocks = selectedBlocks.filter(b => !(b.x === blockData.x && b.y === blockData.y && b.z === blockData.z));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `❌ Removed ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) from mining queue. ${selectedBlocks.length} blocks queued.` 
-    }));
+  if (selectedBlocks.find(b => b.x===blockData.x && b.y===blockData.y && b.z===blockData.z)) {
+    selectedBlocks = selectedBlocks.filter(b => !(b.x===blockData.x && b.y===blockData.y && b.z===blockData.z));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: `❌ Removed ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) from mining queue. ${selectedBlocks.length} blocks queued.` }));
   } else {
-    // Add to selection
     selectedBlocks.push(blockData);
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `✅ Added ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) to mining queue. ${selectedBlocks.length} blocks queued.` 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: `✅ Added ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) to mining queue. ${selectedBlocks.length} blocks queued.` }));
   }
-  
   if (selectedBlocks.length > 0 && !isSelectionMode) {
     isSelectionMode = true;
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `💡 Type 'done' when you have selected all desired blocks to mine.` 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: `💡 Type 'done' when you have selected all desired blocks to mine.` }));
   }
 }
 
-// Listen for block clicks - use a flag to prevent multiple registrations
-if (typeof window !== 'undefined' && !(window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered) {
-  window.addEventListener('block-click', handleBlockClick);
+if (typeof window !== "undefined" && !(window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered) {
+  window.addEventListener("block-click", handleBlockClick);
   (window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered = true;
 }
 
+// -----------------------------------------------------------------------------
+// On-chain override reads (EntityObjectType) via multicall, then terrain fallback
+// -----------------------------------------------------------------------------
+const STORE_ABI = [{
+  type: "function",
+  name: "getField",
+  stateMutability: "view",
+  inputs: [
+    { name: "tableId", type: "bytes32" },
+    { name: "keyTuple", type: "bytes32[]" },
+    { name: "fieldIndex", type: "uint8" }
+  ],
+  outputs: [{ name: "data", type: "bytes" }]
+}] as const;
+
+const OVERRIDE_FLAG = 0x8000;
+
+function normalizeOverride(raw?: `0x${string}` | null): number | undefined {
+  if (!raw || raw === "0x") return undefined;       // no record
+  const v = Number(BigInt(raw)) & 0xffff;           // uint16
+  const base = v & ~OVERRIDE_FLAG;                  // strip top-bit
+  return base === 0 ? undefined : base;             // 0 => treat as no override
+}
+
+async function readEntityObjectTypesMulticall(
+  client: PublicClient,
+  world: `0x${string}`,
+  positions: Vec3[]
+): Promise<Map<`0x${string}`, number | undefined>> {
+  const contracts = positions.map((p) => ({
+    address: world,
+    abi: STORE_ABI,
+    functionName: "getField" as const,
+    args: [ENTITY_OBJECT_TYPE_TABLE_ID_OVERRIDE, [encodeBlock(p)], 0],
+  }));
+
+  const results = await client.multicall({ contracts, allowFailure: true, blockTag: "latest" });
+
+  const out = new Map<`0x${string}`, number | undefined>();
+  positions.forEach((p, i) => {
+    const k = encodeBlock(p);
+    const r = results[i];
+    const value = r.status === "success" ? normalizeOverride(r.result as `0x${string}`) : undefined;
+    out.set(k, value); // will be undefined for "no override" OR explicit zero
+  });
+  return out;
+}
+
+/** Merge: overrides first, then terrain fallback only for misses (bounded concurrency). */
+async function resolveObjectTypesFresh(
+  client: PublicClient,
+  world: `0x${string}`,
+  positions: Vec3[],
+  terrainConcurrency = 12
+): Promise<Map<`0x${string}`, number | undefined>> {
+  const map = await readEntityObjectTypesMulticall(client, world, positions);
+
+  const misses: { pos: Vec3; k: `0x${string}` }[] = [];
+  for (const p of positions) {
+    const k = encodeBlock(p);
+    if (map.get(k) === undefined) misses.push({ pos: p, k });
+  }
+
+  if (misses.length) {
+    let i = 0;
+    const workers = new Array(Math.min(terrainConcurrency, misses.length)).fill(0).map(async () => {
+      while (i < misses.length) {
+        const m = misses[i++];
+        try {
+          const t = await getTerrainBlockType(client, world, m.pos);
+          if (typeof t === "number") map.set(m.k, t);
+        } catch { /* ignore */ }
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  return map;
+}
+
+function displayName(t: number | undefined): string {
+  if (typeof t !== "number") return "Air";
+  const base = objectNamesById[t] ?? `Unknown(${t})`;
+  const d = getFlowerDescriptor(t);
+  return d ? `${d.charAt(0).toUpperCase()}${d.slice(1)} ${base}` : base;
+}
+
+// -----------------------------------------------------------------------------
+// Explore command (batch BOTH modes)
+// -----------------------------------------------------------------------------
 export class ExploreCommand implements CommandHandler {
   async execute(context: CommandContext, direction?: string): Promise<void> {
     try {
       const entityId = encodePlayerEntityId(context.address);
 
-      // Get position
-      const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
+      // Position (indexer)
+      const posQuery = `SELECT "x","y","z" FROM "${POSITION_TABLE}" WHERE "entityId"='${entityId}'`;
       const posRes = await fetch(INDEXER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
       });
-
       const posJson = await posRes.json();
       const posRows = posJson?.result?.[0];
-      if (!Array.isArray(posRows) || posRows.length < 2) {
-        throw new Error("No position found for player. Try 'spawn' first.");
-      }
-
+      if (!Array.isArray(posRows) || posRows.length < 2) throw new Error("No position found for player. Try 'spawn' first.");
       const [posCols, posVals] = posRows;
-      const pos = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
-      const { x, y, z } = { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
+      const posObj = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));
+      const { x, y, z } = { x: Number(posObj.x ?? 0), y: Number(posObj.y ?? 0), z: Number(posObj.z ?? 0) };
 
-      // Get orientation
-      const oriQuery = `SELECT "orientation" FROM "${ORIENTATION_TABLE}" WHERE "entityId" = '${entityId}'`;
+      // Orientation (indexer)
+      const oriQuery = `SELECT "orientation" FROM "${ORIENTATION_TABLE}" WHERE "entityId"='${entityId}'`;
       const oriRes = await fetch(INDEXER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify([{ address: WORLD_ADDRESS, query: oriQuery }]),
       });
-
       const oriJson = await oriRes.json();
       const oriRows = oriJson?.result?.[0];
       let orientation = { label: "north", value: 0 };
-      
       if (Array.isArray(oriRows) && oriRows.length >= 2) {
         const [oriCols, oriVals] = oriRows;
-        const index = oriCols.indexOf("orientation");
-        if (index !== -1 && oriVals[index] !== null) {
-          const raw = Number(oriVals[index]);
+        const idx = oriCols.indexOf("orientation");
+        if (idx !== -1 && oriVals[idx] !== null) {
+          const raw = Number(oriVals[idx]);
           orientation = { label: ["north", "east", "south", "west"][raw] ?? "unknown", value: raw };
         }
       }
 
+      const layers = [2, 1, 0, -1, -2];
+
       if (direction) {
-        // Directional exploration (5 blocks in specified direction)
-        const validDirections = ["north", "n", "east", "e", "south", "s", "west", "w", "northeast", "ne", "northwest", "nw", "southeast", "se", "southwest", "sw"];
-        if (!validDirections.includes(direction.toLowerCase())) {
+        const valid = ["north","n","east","e","south","s","west","w","northeast","ne","northwest","nw","southeast","se","southwest","sw"];
+        if (!valid.includes(direction.toLowerCase())) {
           throw new Error(`Invalid direction: ${direction}. Use north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, or southwest/sw.`);
         }
 
         const [dx, dz] = getOffsetForDirection(direction.toLowerCase());
-        const layers = [2, 1, 0, -1, -2];
-        const columns = [];
+        const columns: { distance: number; coord: string; blocks: string[] }[] = [];
 
-        // Collect data for all 5 blocks
+        // collect all positions for 5-step ray × 5 layers
+        const positionsDir: Vec3[] = [];
         for (let distance = 1; distance <= 5; distance++) {
-          const tx = x + (dx * distance);
-          const tz = z + (dz * distance);
-          const column = [];
-
-          for (const dy of layers) {
-            const pos = [tx, y + dy, tz] as [number, number, number];
-            try {
-              const type = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, pos);
-              let name = typeof type === "number" ? objectNamesById[type] ?? `Unknown(${type})` : "Empty";
-              
-              if (typeof type === "number") {
-                const descriptor = getFlowerDescriptor(type);
-                if (descriptor) {
-                  const capitalizedDescriptor = descriptor.charAt(0).toUpperCase() + descriptor.slice(1);
-                  name = `${capitalizedDescriptor} ${name}` as string;
-                }
-              }
-              
-              column.push(name);
-            } catch {
-              column.push("[error]");
-            }
-          }
-
-          columns.push({
-            distance,
-            coord: `(${tx}, ${y}, ${tz})`,
-            blocks: column
-          });
+          const tx = x + dx * distance;
+          const tz = z + dz * distance;
+          for (const dy of layers) positionsDir.push([tx, y + dy, tz]);
         }
 
-        // Format as columns with clickable blocks
-        const header = `Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}):\n\n`;
+        // single batch read + fallback
+        const typeMapDir = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, positionsDir);
+        const typeAt = (tx: number, ty: number, tz: number) => typeMapDir.get(encodeBlock([tx, ty, tz]));
 
-        // use fixed-width cells instead of padEnd/spaces
+        // build output
+        for (let distance = 1; distance <= 5; distance++) {
+          const tx = x + dx * distance, tz = z + dz * distance;
+          const column: string[] = [];
+          for (const dy of layers) column.push(displayName(typeAt(tx, y + dy, tz)));
+          columns.push({ distance, coord: `(${tx}, ${y}, ${tz})`, blocks: column });
+        }
+
+        const header = `Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}):\n\n`;
         const coordLine = columns.map(col => cell(`Block ${col.distance}`)).join(" ");
         const posLine   = columns.map(col => cell(col.coord)).join(" ");
 
         const layerLines: string[] = [];
         for (let i = 0; i < layers.length; i++) {
           const dy = layers[i];
-          const blockCells = columns.map((col) => {
+          const blockCells = columns.map(col => {
             const blockData: SelectableBlock = {
-              x: x + (dx * col.distance),
+              x: x + dx * col.distance,
               y: y + dy,
-              z: z + (dz * col.distance),
+              z: z + dz * col.distance,
               name: col.blocks[i],
               distance: col.distance,
-              layer: dy
+              layer: dy,
             };
-            return createClickableBlock(blockData); // already returns a fixed-width cell
+            return createClickableBlock(blockData);
           });
-
-          // add space between columns for alignment
           layerLines.push(`${dy >= 0 ? "+" : ""}${dy}: ${blockCells.join(" ")}`);
         }
 
         const msg = `<pre class="explore-output">${header}${coordLine}\n${posLine}\n${layerLines.join("\n")}</pre>`;
+        window.dispatchEvent(new CustomEvent("worker-log", { detail: msg }));
 
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: msg 
-        }));
       } else {
-        // Original explore behavior - now as 3x3 grid of directional columns laid out horizontally
-        const layers = [2, 1, 0, -1, -2];
+        // 3×3 grid — single batch
         const directions = [
-          [
-            { label: "NW", dx: -1, dz: -1 },
-            { label: "N", dx: 0, dz: -1 },
-            { label: "NE", dx: 1, dz: -1 }
-          ],
-          [
-            { label: "W", dx: -1, dz: 0 },
-            { label: "YOU", dx: 0, dz: 0 },
-            { label: "E", dx: 1, dz: 0 }
-          ],
-          [
-            { label: "SW", dx: -1, dz: 1 },
-            { label: "S", dx: 0, dz: 1 },
-            { label: "SE", dx: 1, dz: 1 }
-          ]
+          [{ label: "NW", dx: -1, dz: -1 }, { label: "N", dx: 0, dz: -1 }, { label: "NE", dx: 1, dz: -1 }],
+          [{ label: "W", dx: -1, dz: 0 },   { label: "YOU", dx: 0, dz: 0 }, { label: "E", dx: 1, dz: 0 }],
+          [{ label: "SW", dx: -1, dz: 1 },  { label: "S", dx: 0, dz: 1 },   { label: "SE", dx: 1, dz: 1 }],
         ];
 
-        const report: string[] = [];
-
+        const positionsGrid: Vec3[] = [];
         for (const row of directions) {
-          // Create header line with direction labels
+          for (const dir of row) {
+            for (const dy of layers) positionsGrid.push([x + dir.dx, y + dy, z + dir.dz]);
+          }
+        }
+
+        const typeMapGrid = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, positionsGrid);
+        const typeAtGrid = (tx: number, ty: number, tz: number) => typeMapGrid.get(encodeBlock([tx, ty, tz]));
+
+        const report: string[] = [];
+        for (const row of directions) {
           const headerLine = row.map(dir => {
-            const tx = x + dir.dx;
-            const tz = z + dir.dz;
-            const arrow = {
-              "NW": "<b>↖</b>", "N": "<b>↑</b>", "NE": "<b>↗</b>",
-              "W": "<b>←</b>", "YOU": "<b>●</b>", "E": "<b>→</b>", 
-              "SW": "<b>↙</b>", "S": "<b>↓</b>", "SE": "<b>↘</b>"
-            }[dir.label] || "<b>●</b>";
+            const tx = x + dir.dx, tz = z + dir.dz;
+            type DirectionLabel = "NW" | "N" | "NE" | "W" | "YOU" | "E" | "SW" | "S" | "SE";
+            const arrowMap: Record<DirectionLabel, string> = {
+              NW: "<b>↖</b>",
+              N: "<b>↑</b>", 
+              NE: "<b>↗</b>",
+              W: "<b>←</b>",
+              YOU: "<b>●</b>",
+              E: "<b>→</b>",
+              SW: "<b>↙</b>",
+              S: "<b>↓</b>",
+              SE: "<b>↘</b>"
+            };
+            const arrow = arrowMap[dir.label as DirectionLabel] || "<b>●</b>";
             return cell(`${arrow}${dir.label} at (${tx}, ${y}, ${tz})`);
           }).join(" ");
 
-          // Create lines for each layer
           const layerLines: string[] = [];
           for (const dy of layers) {
             const blockCells = await Promise.all(row.map(async dir => {
-              const tx = x + dir.dx;
-              const tz = z + dir.dz;
-              const currentY = y + dy;
-              
-              try {
-                const pos = [tx, currentY, tz] as [number, number, number];
-                const type = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, pos);
-                let name: string = typeof type === "number" ? objectNamesById[type] ?? `Unknown(${type})` : "Air";
-                
-                if (typeof type === "number") {
-                  const descriptor = getFlowerDescriptor(type);
-                  if (descriptor) {
-                    const capitalizedDescriptor = descriptor.charAt(0).toUpperCase() + descriptor.slice(1);
-                    name = `${capitalizedDescriptor} ${name}`;
-                  }
-                }
-                
-                const blockData: SelectableBlock = {
-                  x: tx,
-                  y: currentY,
-                  z: tz,
-                  name: name,
-                  layer: dy
-                };
-                
-                const clickableBlock = createClickableBlock(blockData);
-                const prefix = (dir.label === "YOU" && (dy === 0 || dy === 1)) ? "YOU:" : "";
-                return cell(`${dy >= 0 ? "+" : ""}${dy}: ${prefix}${clickableBlock}`);
-              } catch {
-                return cell(`${dy >= 0 ? "+" : ""}${dy}: [error]`);
-              }
+              const tx = x + dir.dx, tz = z + dir.dz, ty = y + dy;
+              const name = displayName(typeAtGrid(tx, ty, tz));
+              const blockData: SelectableBlock = { x: tx, y: ty, z: tz, name, layer: dy };
+              const clickableBlock = createClickableBlock(blockData);
+              const prefix = (dir.label === "YOU" && (dy === 0 || dy === 1)) ? "YOU:" : "";
+              return cell(`${dy >= 0 ? "+" : ""}${dy}: ${prefix}${clickableBlock}`);
             }));
-            
             layerLines.push(blockCells.join(" "));
           }
-          
           report.push(`${headerLine}\n${layerLines.join("\n")}`);
         }
 
         const msg = `<pre class="explore-output">You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).\n\n${report.join("\n\n")}</pre>`;
-        
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: msg 
-        }));
+        window.dispatchEvent(new CustomEvent("worker-log", { detail: msg }));
       }
     } catch (error) {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `❌ Explore failed: ${error}` 
-      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: `❌ Explore failed: ${error}` }));
     }
   }
 }
@@ -317,35 +368,10 @@ export class ExploreCommand implements CommandHandler {
 // Export functions for done command
 export { selectedBlocks };
 export function clearSelection() {
-  selectedBlocks.splice(0, selectedBlocks.length); // Clear array completely
+  selectedBlocks.splice(0, selectedBlocks.length);
   isSelectionMode = false;
-  console.log('Selection cleared, selectedBlocks length:', selectedBlocks.length);
+  console.log("Selection cleared, selectedBlocks length:", selectedBlocks.length);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

@@ -7,10 +7,6 @@ const MOVE_ABI = parseAbi([
   'function moveDirections(bytes32 caller, uint8[] directions)',
 ]);
 
-const MOVE_PACKED_ABI = parseAbi([
-  'function moveDirectionsPacked(bytes32 caller, bytes packedDirections)',
-]);
-
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const POSITION_TABLE = "EntityPosition";
 
@@ -62,11 +58,6 @@ const diagonalDirections: Record<string, number[]> = {
 type DirectionCode = 0 | 1 | 2 | 3 | 4 | 5;
 const D = { East: 0, West: 1, Up: 2, Down: 3, South: 4, North: 5 } as const;
 
-function packDirections(dirs: DirectionCode[]): `0x${string}` {
-  const hex = dirs.map(d => d.toString(16).padStart(2, '0')).join('');
-  return `0x${hex}` as `0x${string}`;
-}
-
 async function trySmartMove(
   context: CommandContext, 
   entityId: `0x${string}`, 
@@ -110,41 +101,73 @@ async function trySmartMove(
   throw new Error('All movement plans failed');
 }
 
+async function trySmartMoveDiagonal(
+  context: CommandContext, 
+  entityId: `0x${string}`, 
+  directions: DirectionCode[],
+  directionName: string
+): Promise<{ txHash: string; message: string }> {
+  const plans = [
+    { dirs: directions, desc: directionName },
+    { dirs: [D.Down, ...directions], desc: `down then ${directionName}` },
+    { dirs: [D.Up, ...directions], desc: `up then ${directionName}` },
+    { dirs: [D.Up, D.Up, ...directions], desc: `up twice then ${directionName}` },
+    // Try stepping up between diagonal moves
+    { dirs: [directions[0], D.Up, directions[1]], desc: `${directionName} with step up` }
+  ];
+
+  for (const plan of plans) {
+    try {
+      console.log(`Trying diagonal smart move plan: ${plan.desc}, directions: ${plan.dirs}`);
+      const data = encodeFunctionData({
+        abi: MOVE_ABI,
+        functionName: 'moveDirections',
+        args: [entityId, plan.dirs],
+      });
+
+      const txHash = await context.sessionClient.sendTransaction({
+        to: WORLD_ADDRESS,
+        data,
+        gas: 100000n,
+      });
+
+      console.log(`Diagonal smart move plan succeeded: ${plan.desc}`);
+      return { txHash, message: plan.desc };
+    } catch (error) {
+      const errorStr = String(error);
+      console.log(`Diagonal smart move plan failed: ${plan.desc}, error: ${errorStr}`);
+      if (!errorStr.includes('reverted during simulation')) {
+        throw error;
+      }
+    }
+  }
+
+  throw new Error('All diagonal movement plans failed');
+}
+
 export class MoveCommand implements CommandHandler {
   async execute(context: CommandContext, direction: string): Promise<void> {
     try {
       const lowerDirection = direction.toLowerCase();
       let directionEnums: number[];
       
+      // Declare variables at the top
+      const entityId = encodePlayerEntityId(context.address);
+      const beforePos = await getPlayerPosition(entityId);
+      let txHash: string;
+      let moveDescription = direction;
+      
       // Check if it's a diagonal direction
       if (diagonalDirections[lowerDirection]) {
         directionEnums = diagonalDirections[lowerDirection];
-      } else {
-        // Single cardinal direction
-        const directionEnum = directionToEnum[lowerDirection];
-        if (directionEnum === undefined) {
-          throw new Error(`Invalid direction: ${direction}`);
-        }
-        directionEnums = [directionEnum];
-      }
-
-      const entityId = encodePlayerEntityId(context.address);
-      const beforePos = await getPlayerPosition(entityId);
-
-      // Try smart move for horizontal directions only (exclude Up=2 and Down=3)
-      const useSmartMove = directionEnums.length === 1 && 
-        [0, 1, 4, 5].includes(directionEnums[0]);
-
-      let txHash: string;
-      let moveDescription = direction;
-
-      if (useSmartMove) {
+        
+        // Use smart move for diagonal directions
         try {
-          const result = await trySmartMove(context, entityId, directionEnums[0] as DirectionCode, direction);
+          const result = await trySmartMoveDiagonal(context, entityId, directionEnums as DirectionCode[], direction);
           txHash = result.txHash;
           moveDescription = result.message;
         } catch (smartMoveError) {
-          // Fall back to regular move if smart move fails
+          // Fall back to regular diagonal move
           const data = encodeFunctionData({
             abi: MOVE_ABI,
             functionName: 'moveDirections',
@@ -158,18 +181,50 @@ export class MoveCommand implements CommandHandler {
           });
         }
       } else {
-        // Regular move for up/down/diagonal - no smart move needed
-        const data = encodeFunctionData({
-          abi: MOVE_ABI,
-          functionName: 'moveDirections',
-          args: [entityId, directionEnums],
-        });
+        // Single cardinal direction
+        const directionEnum = directionToEnum[lowerDirection];
+        if (directionEnum === undefined) {
+          throw new Error(`Invalid direction: ${direction}`);
+        }
+        directionEnums = [directionEnum];
 
-        txHash = await context.sessionClient.sendTransaction({
-          to: WORLD_ADDRESS,
-          data,
-          gas: 100000n,
-        });
+        // Try smart move for horizontal directions only (exclude Up=2 and Down=3)
+        const useSmartMove = directionEnums.length === 1 && 
+          [0, 1, 4, 5].includes(directionEnums[0]);
+
+        if (useSmartMove) {
+          try {
+            const result = await trySmartMove(context, entityId, directionEnums[0] as DirectionCode, direction);
+            txHash = result.txHash;
+            moveDescription = result.message;
+          } catch (smartMoveError) {
+            // Fall back to regular move if smart move fails
+            const data = encodeFunctionData({
+              abi: MOVE_ABI,
+              functionName: 'moveDirections',
+              args: [entityId, directionEnums],
+            });
+
+            txHash = await context.sessionClient.sendTransaction({
+              to: WORLD_ADDRESS,
+              data,
+              gas: 100000n,
+            });
+          }
+        } else {
+          // Regular move for up/down - no smart move needed
+          const data = encodeFunctionData({
+            abi: MOVE_ABI,
+            functionName: 'moveDirections',
+            args: [entityId, directionEnums],
+          });
+
+          txHash = await context.sessionClient.sendTransaction({
+            to: WORLD_ADDRESS,
+            data,
+            gas: 100000n,
+          });
+        }
       }
       
       // Wait for indexer to update

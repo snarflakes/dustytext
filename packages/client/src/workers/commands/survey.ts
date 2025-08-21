@@ -6,6 +6,115 @@ import { getBiome } from "../../biomeHelper";
 import { biomeNamesById, getRandomBiomeDescriptor, getRandomBiomeSensory } from "../../biomes";
 import { CommandHandler, CommandContext } from './types';
 
+// -----------------------------------------------------------------------------
+// Block encoding (copied from explore.ts)
+// -----------------------------------------------------------------------------
+type Vec3 = [number, number, number];
+
+const BYTES_32_BITS = 256n;
+const ENTITY_TYPE_BITS = 8n;
+const ENTITY_ID_BITS = BYTES_32_BITS - ENTITY_TYPE_BITS; // 248
+const VEC3_BITS = 96n;
+const ENTITY_TYPE_BLOCK = 0x03; // matches EntityTypes.Block
+
+function toU32(n: number): bigint {
+  return BigInt.asUintN(32, BigInt(n)); // two's complement pack for int32
+}
+function packVec3([x, y, z]: Vec3): bigint {
+  const X = toU32(x), Y = toU32(y), Z = toU32(z);
+  return (X << 64n) | (Y << 32n) | Z; // 96 bits
+}
+function encode(entityType: number, data: bigint): `0x${string}` {
+  return `0x${((BigInt(entityType) << ENTITY_ID_BITS) | data).toString(16).padStart(64, '0')}` as `0x${string}`;
+}
+function encodeCoord(entityType: number, coord: Vec3): `0x${string}` {
+  const packed = packVec3(coord);
+  return encode(entityType, packed << (ENTITY_ID_BITS - VEC3_BITS));
+}
+function encodeBlock(pos: Vec3): `0x${string}` {
+  return encodeCoord(ENTITY_TYPE_BLOCK, pos);
+}
+
+// -----------------------------------------------------------------------------
+// On-chain override reads
+// -----------------------------------------------------------------------------
+const STORE_ABI = [{
+  type: "function",
+  name: "getField",
+  stateMutability: "view",
+  inputs: [
+    { name: "tableId", type: "bytes32" },
+    { name: "keyTuple", type: "bytes32[]" },
+    { name: "fieldIndex", type: "uint8" }
+  ],
+  outputs: [{ name: "data", type: "bytes" }]
+}] as const;
+
+const ENTITY_OBJECT_TYPE_TABLE_ID_OVERRIDE = "0x74620000000000000000000000000000456e746974794f626a65637454797065" as `0x${string}`;
+const OVERRIDE_FLAG = 0x8000;
+
+function normalizeOverride(raw?: `0x${string}` | null): number | undefined {
+  if (!raw || raw === "0x") return undefined;       // no record
+  const v = Number(BigInt(raw)) & 0xffff;           // uint16
+  const base = v & ~OVERRIDE_FLAG;                  // strip top-bit
+  return base === 0 ? undefined : base;             // 0 => treat as no override
+}
+
+async function readEntityObjectTypesMulticall(
+  client: PublicClient,
+  world: `0x${string}`,
+  positions: Vec3[]
+): Promise<Map<`0x${string}`, number | undefined>> {
+  const contracts = positions.map((p) => ({
+    address: world,
+    abi: STORE_ABI,
+    functionName: "getField" as const,
+    args: [ENTITY_OBJECT_TYPE_TABLE_ID_OVERRIDE, [encodeBlock(p)], 0],
+  }));
+
+  const results = await client.multicall({ contracts, allowFailure: true, blockTag: "latest" });
+
+  const out = new Map<`0x${string}`, number | undefined>();
+  positions.forEach((p, i) => {
+    const k = encodeBlock(p);
+    const r = results[i];
+    const value = r.status === "success" ? normalizeOverride(r.result as `0x${string}`) : undefined;
+    out.set(k, value);
+  });
+  return out;
+}
+
+async function resolveObjectTypesFresh(
+  client: PublicClient,
+  world: `0x${string}`,
+  positions: Vec3[],
+  terrainConcurrency = 12
+): Promise<Map<`0x${string}`, number | undefined>> {
+  const map = await readEntityObjectTypesMulticall(client, world, positions);
+
+  const misses: { pos: Vec3; k: `0x${string}` }[] = [];
+  for (const p of positions) {
+    const k = encodeBlock(p);
+    if (map.get(k) === undefined) misses.push({ pos: p, k });
+  }
+
+  if (misses.length) {
+    let i = 0;
+    const workers = new Array(Math.min(terrainConcurrency, misses.length)).fill(0).map(async () => {
+      while (i < misses.length) {
+        const m = misses[i++];
+        try {
+          const t = await getTerrainBlockType(client, world, m.pos);
+          if (typeof t === "number") map.set(m.k, t);
+        } catch { /* ignore */ }
+      }
+    });
+    await Promise.all(workers);
+  }
+
+  return map;
+}
+
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const POSITION_TABLE = "EntityPosition";
@@ -31,7 +140,6 @@ function encodePlayerEntityId(address: string): `0x${string}` {
 
 // Horizon sensing types and implementation
 type Facing = "north" | "east" | "south" | "west";
-interface Vec3 { x: number; y: number; z: number }
 
 function isWater(blockId: number): boolean {
   const name = objectNamesById[blockId]?.toLowerCase() || "";
@@ -92,7 +200,10 @@ async function senseHorizon(pos: Vec3): Promise<string> {
     // First check if we're currently in water
     let currentlyInWater = false;
     try {
-      const currentBlockType = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, [pos.x, pos.y, pos.z]);
+      const currentPositions: Vec3[] = [[pos[0], pos[1], pos[2]]];
+      const currentTypeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, currentPositions);
+      const currentBlockType = currentTypeMap.get(encodeBlock([pos[0], pos[1], pos[2]]));
+      
       if (typeof currentBlockType === "number" && isWater(currentBlockType)) {
         currentlyInWater = true;
         console.log('SurveyCommand: Currently standing in water');
@@ -113,16 +224,26 @@ async function senseHorizon(pos: Vec3): Promise<string> {
       
       const terrain: string[] = [];
       let hasWater = false;
-      let maxHeight = pos.y;
-      let minHeight = pos.y;
+      let maxHeight = pos[1];
+      let minHeight = pos[1];
       
       // Check multiple blocks in this direction (like explore does)
       try {
         const layers = [2, 1, 0, -1, -2];
+        const checkPositions: Vec3[] = [];
+        
         for (let distance = 1; distance <= 3; distance++) {
           for (const dy of layers) {
-            const checkPos = [pos.x + (dx * distance), pos.y + dy, pos.z + (dz * distance)] as [number, number, number];
-            const blockType = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, checkPos);
+            checkPositions.push([pos[0] + (dx * distance), pos[1] + dy, pos[2] + (dz * distance)]);
+          }
+        }
+        
+        const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, checkPositions);
+        
+        for (let distance = 1; distance <= 3; distance++) {
+          for (const dy of layers) {
+            const checkPos: Vec3 = [pos[0] + (dx * distance), pos[1] + dy, pos[2] + (dz * distance)];
+            const blockType = typeMap.get(encodeBlock(checkPos));
             
             if (typeof blockType === "number" && objectNamesById[blockType]) {
               const blockName = objectNamesById[blockType].toLowerCase();
@@ -132,7 +253,7 @@ async function senseHorizon(pos: Vec3): Promise<string> {
                 hasWater = true;
               }
               
-              const height = pos.y + dy;
+              const height = pos[1] + dy;
               if (height > maxHeight) maxHeight = height;
               if (height < minHeight) minHeight = height;
             }
@@ -141,16 +262,17 @@ async function senseHorizon(pos: Vec3): Promise<string> {
         
         console.log(`SurveyCommand: ${dir} extended terrain check (3 blocks):`, terrain, 'hasWater:', hasWater);
         immediateResults.push({ dir, terrain, hasWater, maxHeight, minHeight });
-        
+
       } catch (error) {
         console.log(`SurveyCommand: Failed to check ${dir} direction:`, error);
-        immediateResults.push({ dir, terrain: [], hasWater: false, maxHeight: pos.y, minHeight: pos.y });
+        immediateResults.push({ dir, terrain: [], hasWater: false, maxHeight: pos[1], minHeight: pos[1] });
       }
       
       // NEW: Check single block 10 blocks out for water
       try {
-        const checkPos = [pos.x + (dx * 10), pos.y, pos.z + (dz * 10)] as [number, number, number];
-        const blockType = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, checkPos);
+        const distantPositions: Vec3[] = [[pos[0] + (dx * 10), pos[1], pos[2] + (dz * 10)]];
+        const distantTypeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, distantPositions);
+        const blockType = distantTypeMap.get(encodeBlock([pos[0] + (dx * 10), pos[1], pos[2] + (dz * 10)]));
         
         const hasDistantWater = typeof blockType === "number" && isWater(blockType);
         distantWaterResults.push({ dir, hasWater: hasDistantWater });
@@ -181,7 +303,7 @@ async function senseHorizon(pos: Vec3): Promise<string> {
       
       // Check for elevation changes (mountains) - only if not already a river
       if (kind !== "river") {
-        const heightDiff = r.maxHeight - pos.y;
+        const heightDiff = r.maxHeight - pos[1];
         
         // Only count actual terrain blocks, not vegetation
         const terrainBlocks = r.terrain.filter(t => 
@@ -228,7 +350,7 @@ async function senseHorizon(pos: Vec3): Promise<string> {
     console.log('SurveyCommand: Mountain directions:', mountainDirections);
     
     // Build description based on what we found
-    const r = seedRand(pos.x, pos.z);
+    const r = seedRand(pos[0], pos[2]);
     
     // If we're in water AND there are both rivers and mountains, mention both
     if (currentlyInWater && riverDirections.length > 0 && mountainDirections.length > 0) {
@@ -350,7 +472,7 @@ export class SurveyCommand implements CommandHandler {
         console.log('SurveyCommand: Orientation fetch failed:', oriError);
       }
 
-      // Get terrain and biome (with error handling)
+      // Get terrain and biome using new accurate methods
       let terrainLabel = "Unknown terrain.";
       let biomeLabel = "";
       
@@ -358,8 +480,12 @@ export class SurveyCommand implements CommandHandler {
       const cachedDescriptors = descriptorCache.get(cacheKey) || {};
       
       try {
-        const blockType = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, [x, y - 1, z]);
-        const surfaceBlockType = await getTerrainBlockType(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, [x, y, z]);
+        // Use new accurate block detection for ground and surface
+        const positions: Vec3[] = [[x, y - 1, z], [x, y, z]];
+        const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, positions);
+        
+        const blockType = typeMap.get(encodeBlock([x, y - 1, z]));
+        const surfaceBlockType = typeMap.get(encodeBlock([x, y, z]));
         
         if (typeof blockType === "number" && objectNamesById[blockType]) {
           const blockName = objectNamesById[blockType].toLowerCase();
@@ -414,7 +540,7 @@ export class SurveyCommand implements CommandHandler {
       }
 
       // Perform horizon sensing
-      const horizonDescription = await senseHorizon({ x, y, z });
+      const horizonDescription = await senseHorizon([x, y, z]);
 
       // Update cache
       descriptorCache.set(cacheKey, cachedDescriptors);
@@ -433,6 +559,24 @@ export class SurveyCommand implements CommandHandler {
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

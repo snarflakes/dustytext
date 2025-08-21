@@ -275,7 +275,18 @@ export class ExploreCommand implements CommandHandler {
         for (let distance = 1; distance <= 5; distance++) {
           const tx = x + dx * distance, tz = z + dz * distance;
           const column: string[] = [];
-          for (const dy of layers) column.push(displayName(typeAt(tx, y + dy, tz)));
+          for (const dy of layers) {
+            const blockName = displayName(typeAt(tx, y + dy, tz));
+            const blockData: SelectableBlock = {
+              x: tx,
+              y: y + dy,
+              z: tz,
+              name: blockName,
+              distance: distance,
+              layer: dy,
+            };
+            column.push(createClickableBlock(blockData));
+          }
           columns.push({ distance, coord: `(${tx}, ${y}, ${tz})`, blocks: column });
         }
 
@@ -286,17 +297,7 @@ export class ExploreCommand implements CommandHandler {
         const layerLines: string[] = [];
         for (let i = 0; i < layers.length; i++) {
           const dy = layers[i];
-          const blockCells = columns.map(col => {
-            const blockData: SelectableBlock = {
-              x: x + dx * col.distance,
-              y: y + dy,
-              z: z + dz * col.distance,
-              name: col.blocks[i],
-              distance: col.distance,
-              layer: dy,
-            };
-            return createClickableBlock(blockData);
-          });
+          const blockCells = columns.map(col => col.blocks[i]);
           layerLines.push(`${dy >= 0 ? "+" : ""}${dy}: ${blockCells.join(" ")}`);
         }
 
@@ -327,15 +328,15 @@ export class ExploreCommand implements CommandHandler {
             const tx = x + dir.dx, tz = z + dir.dz;
             type DirectionLabel = "NW" | "N" | "NE" | "W" | "YOU" | "E" | "SW" | "S" | "SE";
             const arrowMap: Record<DirectionLabel, string> = {
-              NW: "<b>↖</b>",
-              N: "<b>↑</b>", 
-              NE: "<b>↗</b>",
-              W: "<b>←</b>",
-              YOU: "<b>●</b>",
-              E: "<b>→</b>",
-              SW: "<b>↙</b>",
-              S: "<b>↓</b>",
-              SE: "<b>↘</b>"
+              NW: "<b style='color: white;'>↖</b>",
+              N: "<b style='color: white;'>↑</b>", 
+              NE: "<b style='color: white;'>↗</b>",
+              W: "<b style='color: white;'>←</b>",
+              YOU: "<b style='color: white;'>●</b>",
+              E: "<b style='color: white;'>→</b>",
+              SW: "<b style='color: white;'>↙</b>",
+              S: "<b style='color: white;'>↓</b>",
+              SE: "<b style='color: white;'>↘</b>"
             };
             const arrow = arrowMap[dir.label as DirectionLabel] || "<b>●</b>";
             return cell(`${arrow}${dir.label} at (${tx}, ${y}, ${tz})`);
@@ -372,6 +373,9 @@ export function clearSelection() {
   isSelectionMode = false;
   console.log("Selection cleared, selectedBlocks length:", selectedBlocks.length);
 }
+
+
+
 
 
 

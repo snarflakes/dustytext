@@ -172,7 +172,7 @@ export class LookCommand implements CommandHandler {
       
       const posRows = posJson?.result?.[0];
       if (!Array.isArray(posRows) || posRows.length < 2) {
-        throw new Error("No position found for player. Try 'spawn' first.");
+        throw new Error("You float amongst the stars. A sprite, a spark brimming with potential. Try 'spawn' first.");
       }
 
       const [posCols, posVals] = posRows;
@@ -284,7 +284,7 @@ export class LookCommand implements CommandHandler {
     } catch (error) {
       console.error('LookCommand: Command failed:', error);
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `❌ Look failed: ${error}` 
+        detail: `❌ Look ${error}` 
       }));
     }
   }

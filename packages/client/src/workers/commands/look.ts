@@ -275,7 +275,21 @@ export class LookCommand implements CommandHandler {
       // Update cache
       descriptorCache.set(cacheKey, cachedDescriptors);
 
-      const finalMessage = `${terrainLabel}${biomeLabel} You are at (${x}, ${y}, ${z}), facing ${orientation.label}. `;
+      // Get biome name for header (without descriptor)
+      let biomeHeaderText = "";
+      try {
+        const biomeId = await getBiome(WORLD_ADDRESS as `0x${string}`, publicClient as PublicClient, [x, y, z]);
+        const biomeName = biomeNamesById[biomeId];
+        if (biomeName) {
+          biomeHeaderText = `<div style="background-color: blue; color: white; padding: 2px 4px; margin: 0; width: 100%; line-height: 1;">[${biomeName}]</div>`;
+        }
+      } catch (biomeError) {
+        console.log('LookCommand: Biome header fetch failed:', biomeError);
+      }
+
+      const lookOutput = `${terrainLabel}${biomeLabel} You are at (${x}, ${y}, ${z}), facing ${orientation.label}. `;
+      const finalMessage = biomeHeaderText ? `${biomeHeaderText}${lookOutput}` : lookOutput;
+      
       console.log('LookCommand: Final message:', finalMessage);
 
       window.dispatchEvent(new CustomEvent("worker-log", { 
@@ -289,5 +303,7 @@ export class LookCommand implements CommandHandler {
     }
   }
 }
+
+
 
 

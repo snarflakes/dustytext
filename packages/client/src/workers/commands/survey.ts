@@ -186,6 +186,8 @@ function pick<T>(arr: T[], r: () => number) {
 async function senseHorizon(pos: Vec3): Promise<string> {
   const budget = 30000; // ms - 30 second timeout
   const dirs: Facing[] = ["north", "east", "south", "west"];
+  const diagonalDirs = ["northeast", "northwest", "southeast", "southwest"];
+  const allDirs = [...dirs, ...diagonalDirs];
   
   const timeoutPromise = new Promise<string>(resolve => 
     setTimeout(() => {
@@ -195,7 +197,7 @@ async function senseHorizon(pos: Vec3): Promise<string> {
   );
   
   const sensePromise = (async () => {
-    console.log('SurveyCommand: Starting immediate terrain check at position:', pos);
+    console.log('SurveyCommand: Starting extended water detection at position:', pos);
     
     // First check if we're currently in water
     let currentlyInWater = false;
@@ -212,11 +214,58 @@ async function senseHorizon(pos: Vec3): Promise<string> {
       console.log('SurveyCommand: Failed to check current position for water:', error);
     }
     
-    // Check immediate surroundings (extend range like explore does)
-    const immediateResults: Array<{dir: Facing, terrain: string[], hasWater: boolean, maxHeight: number, minHeight: number}> = [];
+    // Extended water detection - sample every 5 blocks out to 100 blocks
+    const waterResults: Array<{dir: string, distance: number, hasWater: boolean}> = [];
     
-    // NEW: Check single block 10 blocks out for water in each direction
-    const distantWaterResults: Array<{dir: Facing, hasWater: boolean}> = [];
+    for (const dir of allDirs) {
+      let dx = 0, dz = 0;
+      
+      // Handle cardinal and diagonal directions
+      if (dir.includes("north")) dz = -1;
+      if (dir.includes("south")) dz = 1;
+      if (dir.includes("east")) dx = 1;
+      if (dir.includes("west")) dx = -1;
+      
+      // For diagonals, normalize the movement
+      if (dir.includes("north") && dir.includes("east")) { dx = 1; dz = -1; }
+      else if (dir.includes("north") && dir.includes("west")) { dx = -1; dz = -1; }
+      else if (dir.includes("south") && dir.includes("east")) { dx = 1; dz = 1; }
+      else if (dir.includes("south") && dir.includes("west")) { dx = -1; dz = 1; }
+      
+      // Sample positions every 10 blocks from 10 to 100
+      const samplePositions: Vec3[] = [];
+      const distances = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
+      
+      for (const distance of distances) {
+        // Check at water level (y) and one below (y-1) for better detection
+        samplePositions.push([pos[0] + (dx * distance), pos[1], pos[2] + (dz * distance)]);
+        samplePositions.push([pos[0] + (dx * distance), pos[1] - 1, pos[2] + (dz * distance)]);
+      }
+      
+      try {
+        const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, samplePositions);
+        
+        // Check each distance for water
+        for (const distance of distances) {
+          const blockType1 = typeMap.get(encodeBlock([pos[0] + (dx * distance), pos[1], pos[2] + (dz * distance)]));
+          const blockType2 = typeMap.get(encodeBlock([pos[0] + (dx * distance), pos[1] - 1, pos[2] + (dz * distance)]));
+          
+          const hasWater = (typeof blockType1 === "number" && isWater(blockType1)) || 
+                          (typeof blockType2 === "number" && isWater(blockType2));
+          
+          if (hasWater) {
+            waterResults.push({ dir, distance, hasWater: true });
+            console.log(`SurveyCommand: Found water ${distance} blocks ${dir}`);
+            break; // Found water in this direction, no need to check further
+          }
+        }
+      } catch (error) {
+        console.log(`SurveyCommand: Failed extended water check ${dir}:`, error);
+      }
+    }
+    
+    // Check immediate surroundings for terrain features (existing code)
+    const immediateResults: Array<{dir: Facing, terrain: string[], hasWater: boolean, maxHeight: number, minHeight: number}> = [];
     
     for (const dir of dirs) {
       const dx = dir === "east" ? 1 : dir === "west" ? -1 : 0;
@@ -227,7 +276,6 @@ async function senseHorizon(pos: Vec3): Promise<string> {
       let maxHeight = pos[1];
       let minHeight = pos[1];
       
-      // Check multiple blocks in this direction (like explore does)
       try {
         const layers = [2, 1, 0, -1, -2];
         const checkPositions: Vec3[] = [];
@@ -260,148 +308,113 @@ async function senseHorizon(pos: Vec3): Promise<string> {
           }
         }
         
-        console.log(`SurveyCommand: ${dir} extended terrain check (3 blocks):`, terrain, 'hasWater:', hasWater);
         immediateResults.push({ dir, terrain, hasWater, maxHeight, minHeight });
-
       } catch (error) {
         console.log(`SurveyCommand: Failed to check ${dir} direction:`, error);
         immediateResults.push({ dir, terrain: [], hasWater: false, maxHeight: pos[1], minHeight: pos[1] });
       }
-      
-      // NEW: Check single block 10 blocks out for water
-      try {
-        const distantPositions: Vec3[] = [[pos[0] + (dx * 10), pos[1], pos[2] + (dz * 10)]];
-        const distantTypeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, distantPositions);
-        const blockType = distantTypeMap.get(encodeBlock([pos[0] + (dx * 10), pos[1], pos[2] + (dz * 10)]));
-        
-        const hasDistantWater = typeof blockType === "number" && isWater(blockType);
-        distantWaterResults.push({ dir, hasWater: hasDistantWater });
-        
-        console.log(`SurveyCommand: ${dir} at 10 blocks - water: ${hasDistantWater}`);
-      } catch (error) {
-        console.log(`SurveyCommand: Failed distant water check ${dir}:`, error);
-        distantWaterResults.push({ dir, hasWater: false });
-      }
     }
     
-    // Analyze the immediate results
+    // Build description with water detection
+    const r = seedRand(pos[0], pos[2]);
+    
+    // Find closest water sources in any direction (get top 2)
+    const sortedWaterResults = waterResults.sort((a, b) => a.distance - b.distance);
+    const closestWaterSources = sortedWaterResults.slice(0, 2);
+    
+    // If we found distant water, mention it
+    if (closestWaterSources.length > 0 && !currentlyInWater) {
+      let waterPhrase = "";
+      if (closestWaterSources.length === 1) {
+        waterPhrase = `A glimmer of water catches your eye, roughly ${closestWaterSources[0].distance} steps to the ${closestWaterSources[0].dir}.`;
+      } else {
+        waterPhrase = `Glimmers of water catch your eye: roughly ${closestWaterSources[0].distance} steps to the ${closestWaterSources[0].dir} and ${closestWaterSources[1].distance} steps to the ${closestWaterSources[1].dir}.`;
+      }
+      
+      // Also check for immediate terrain features
+      const scored = immediateResults.map(r => {
+        let score = 0;
+        let kind = "clear";
+        
+        if (r.hasWater) {
+          score = 10;
+          kind = "river";
+        } else {
+          const heightDiff = r.maxHeight - pos[1];
+          const earthenBlocks = r.terrain.filter(t => 
+            t.includes("stone") || t.includes("rock") || t.includes("granite") || 
+            t.includes("basalt") || t.includes("dirt") || t.includes("clay") || t.includes("gravel")
+          );
+          const earthenPercentage = r.terrain.length > 0 ? (earthenBlocks.length / r.terrain.length) : 0;
+          
+          if (earthenPercentage >= 0.75 && heightDiff >= 2 && r.terrain.length >= 5) {
+            score = 5;
+            kind = "mountain";
+          }
+        }
+        
+        return { ...r, score, kind };
+      });
+      
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0];
+      
+      if (best && best.score > 0) {
+        const bestDirName = best.dir.charAt(0).toUpperCase() + best.dir.slice(1);
+        if (best.kind === "mountain") {
+          const mountainPhrase = pick(phrases.mountain.steep, r);
+          return `${waterPhrase} ${bestDirName}: ${mountainPhrase}`;
+        } else if (best.kind === "river") {
+          const riverPhrase = pick(phrases.river.near, r);
+          return `${bestDirName}: ${riverPhrase} ${waterPhrase}`;
+        }
+      }
+      
+      return waterPhrase;
+    }
+    
+    // Fall back to existing immediate terrain analysis
     const scored = immediateResults.map(r => {
       let score = 0;
       let kind = "clear";
-      let waterCount = 0;
       
-      // Count actual water blocks in the terrain (not including current position)
-      waterCount = r.terrain.filter(t => t.includes("water") || t.includes("ocean") || t.includes("sea")).length;
-      
-      console.log(`SurveyCommand: ${r.dir} terrain analysis:`, r.terrain, 'waterCount:', waterCount);
-      
-      // Check for water in this direction's terrain - RIVERS GET PRIORITY
-      if (waterCount > 0) {
-        score = 2 + waterCount; // Higher score for more water
+      if (r.hasWater) {
+        score = 10;
         kind = "river";
-      }
-      
-      // Check for elevation changes (mountains) - only if not already a river
-      if (kind !== "river") {
+      } else {
         const heightDiff = r.maxHeight - pos[1];
-        
-        // Only count actual terrain blocks, not vegetation
-        const terrainBlocks = r.terrain.filter(t => 
-          t !== "air" && 
-          !t.includes("leaf") && 
-          !t.includes("grass") && 
-          !t.includes("log") && 
-          !t.includes("wood") &&
-          !t.includes("flower") &&
-          !t.includes("vine") &&
-          !t.includes("bush")
-        );
-        
-        // Count earthen/rocky blocks specifically
         const earthenBlocks = r.terrain.filter(t => 
-          t.includes("stone") || 
-          t.includes("rock") || 
-          t.includes("granite") || 
-          t.includes("basalt") ||
-          t.includes("dirt") ||
-          t.includes("clay") ||
-          t.includes("gravel")
+          t.includes("stone") || t.includes("rock") || t.includes("granite") || 
+          t.includes("basalt") || t.includes("dirt") || t.includes("clay") || t.includes("gravel")
         );
-        
-        // Require 75% earthen blocks AND significant height difference for mountain
         const earthenPercentage = r.terrain.length > 0 ? (earthenBlocks.length / r.terrain.length) : 0;
         
-        if (earthenPercentage >= 0.75 && heightDiff >= 2 && terrainBlocks.length >= 5) {
-          score = Math.max(score, 10);
+        if (earthenPercentage >= 0.75 && heightDiff >= 2 && r.terrain.length >= 5) {
+          score = 5;
           kind = "mountain";
         }
       }
       
-      console.log(`SurveyCommand: ${r.dir} scored ${score} as ${kind}, waterCount:`, waterCount);
-      
-      return { ...r, score, kind, waterCount };
+      return { ...r, score, kind };
     });
     
-    // Find the best river direction (most water) and best mountain direction
-    const riverDirections = scored.filter(r => r.kind === "river").sort((a, b) => b.waterCount - a.waterCount);
-    const mountainDirections = scored.filter(r => r.kind === "mountain").sort((a, b) => b.score - a.score);
-    
-    console.log('SurveyCommand: River directions:', riverDirections);
-    console.log('SurveyCommand: Mountain directions:', mountainDirections);
-    
-    // Build description based on what we found
-    const r = seedRand(pos[0], pos[2]);
-    
-    // If we're in water AND there are both rivers and mountains, mention both
-    if (currentlyInWater && riverDirections.length > 0 && mountainDirections.length > 0) {
-      const bestRiver = riverDirections[0];
-      const bestMountain = mountainDirections[0];
-      
-      const riverPhrase = pick(phrases.river.walk, r);
-      const mountainPhrase = pick(phrases.mountain.steep, r);
-      const riverDirName = bestRiver.dir.charAt(0).toUpperCase() + bestRiver.dir.slice(1);
-      const mountainDirName = bestMountain.dir.charAt(0).toUpperCase() + bestMountain.dir.slice(1);
-      
-      return `${riverDirName}: ${riverPhrase} ${mountainDirName}: ${mountainPhrase}`;
-    }
-    
-    // If we're in water but no river direction found, just mention the river generally
-    if (currentlyInWater) {
-      const riverPhrase = pick(phrases.river.walk, r);
-      if (mountainDirections.length > 0) {
-        const bestMountain = mountainDirections[0];
-        const mountainPhrase = pick(phrases.mountain.steep, r);
-        const mountainDirName = bestMountain.dir.charAt(0).toUpperCase() + bestMountain.dir.slice(1);
-        return `${riverPhrase} ${mountainDirName}: ${mountainPhrase}`;
-      }
-      
-      // NEW: Add distant water information for water navigation
-      const landDirections = distantWaterResults.filter(r => !r.hasWater).map(r => r.dir);
-      
-      if (landDirections.length > 0) {
-        const dirNames = landDirections.map(d => d.toLowerCase());
-        return `${riverPhrase} Dry land appears to be ${dirNames.join(" and ")}.`;
-      } else {
-        return `${riverPhrase} No end to water seen in all directions.`;
-      }
-    }
-    
-    // Find the most interesting direction overall
     scored.sort((a, b) => b.score - a.score);
     const best = scored[0];
     
-    if (best.score === 0) {
-      return pick(phrases.clear, r);
+    if (best && best.score > 0) {
+      const bestDirName = best.dir.charAt(0).toUpperCase() + best.dir.slice(1);
+      if (best.kind === "mountain") {
+        const mountainPhrase = pick(phrases.mountain.steep, r);
+        return `${bestDirName}: ${mountainPhrase}`;
+      } else if (best.kind === "river") {
+        const riverPhrase = pick(phrases.river.near, r);
+        return `${bestDirName}: ${riverPhrase}`;
+      }
     }
     
-    const dirName = best.dir.charAt(0).toUpperCase() + best.dir.slice(1);
-    
-    if (best.kind === "river") {
-      const phrase = pick(phrases.river.near, r);
-      return `${dirName}: ${phrase}`;
-    } else if (best.kind === "mountain") {
-      const phrase = pick(phrases.mountain.steep, r);
-      return `${dirName}: ${phrase}`;
+    // No water found within scanning range
+    if (!currentlyInWater && waterResults.length === 0) {
+      return "No water sources detected within 100 steps. " + pick(phrases.clear, r);
     }
     
     return pick(phrases.clear, r);
@@ -413,6 +426,11 @@ async function senseHorizon(pos: Vec3): Promise<string> {
 export class SurveyCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {
     try {
+      // Show initial survey message
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "\nYou get up on your toes, squint your eyes and look in all directions....\nRoundtime: 9 sec." 
+      }));
+
       const entityId = encodePlayerEntityId(context.address);
       console.log('SurveyCommand: Starting with entityId:', entityId);
 
@@ -542,10 +560,82 @@ export class SurveyCommand implements CommandHandler {
       // Perform horizon sensing
       const horizonDescription = await senseHorizon([x, y, z]);
 
+      // Check what's above the player
+      let overheadDescription = "";
+      try {
+        const overheadPositions: Vec3[] = [];
+        for (let dy = 1; dy <= 10; dy++) {
+          overheadPositions.push([x, y + dy, z]);
+        }
+        
+        const overheadTypeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, overheadPositions);
+        const overheadBlocks: string[] = [];
+        
+        for (let dy = 1; dy <= 10; dy++) {
+          const blockType = overheadTypeMap.get(encodeBlock([x, y + dy, z]));
+          if (typeof blockType === "number" && objectNamesById[blockType] && blockType !== 1) { // 1 is Air
+            const blockName = objectNamesById[blockType].toLowerCase();
+            overheadBlocks.push(blockName);
+          }
+        }
+        
+        if (overheadBlocks.length > 0) {
+          // Categorize what's above
+          const hasLeaves = overheadBlocks.some(block => block.includes("leaves"));
+          const hasWood = overheadBlocks.some(block => block.includes("wood") || block.includes("log"));
+          const hasVines = overheadBlocks.some(block => block.includes("vine"));
+          const hasFlowers = overheadBlocks.some(block => block.includes("flower") || block.includes("petal"));
+          const hasStone = overheadBlocks.some(block => block.includes("stone") || block.includes("rock"));
+          
+          if (hasVines && hasLeaves) {
+            overheadDescription = " Jungle vines hang down through the leafy canopy above.";
+          } else if (hasVines) {
+            overheadDescription = " Vines dangle from above, swaying gently.";
+          } else if (hasLeaves && hasWood) {
+            overheadDescription = " Tree branches and leaves form a natural canopy overhead.";
+          } else if (hasLeaves) {
+            overheadDescription = " Leafy branches stretch above you.";
+          } else if (hasWood) {
+            overheadDescription = " Wooden structures or tree trunks rise above.";
+          } else if (hasFlowers) {
+            overheadDescription = " Colorful blooms hang overhead.";
+          } else if (hasStone) {
+            overheadDescription = " Stone formations loom above you.";
+          } else {
+            // Generic description for other blocks
+            const uniqueBlocks = [...new Set(overheadBlocks)];
+            if (uniqueBlocks.length === 1) {
+              overheadDescription = ` ${uniqueBlocks[0].charAt(0).toUpperCase() + uniqueBlocks[0].slice(1)} blocks the sky above.`;
+            } else {
+              overheadDescription = " Various structures rise above you.";
+            }
+          }
+        } else {
+          overheadDescription = " Clear skies extend above you. You gaze momentarily, deep into the blue sky.";
+        }
+      } catch (overheadError) {
+        console.log('SurveyCommand: Overhead check failed:', overheadError);
+        overheadDescription = " Clear skies extend above you. You gaze momentarily, deep into the blue sky.";
+      }
+
       // Update cache
       descriptorCache.set(cacheKey, cachedDescriptors);
 
-      const finalMessage = `${terrainLabel}${biomeLabel} ${horizonDescription} You are at (${x}, ${y}, ${z}), facing ${orientation.label}. `;
+      // Get biome name for header (without descriptor) - same as look command
+      let biomeHeaderText = "";
+      try {
+        const biomeId = await getBiome(WORLD_ADDRESS as `0x${string}`, publicClient as PublicClient, [x, y, z]);
+        const biomeName = biomeNamesById[biomeId];
+        if (biomeName) {
+          biomeHeaderText = `<div style="background-color: blue; color: white; padding: 2px 4px; margin: 0; width: 100%; line-height: 1;">[${biomeName}]</div>`;
+        }
+      } catch (biomeError) {
+        console.log('SurveyCommand: Biome header fetch failed:', biomeError);
+      }
+
+      const surveyOutput = `${terrainLabel}${biomeLabel} ${horizonDescription}${overheadDescription} You are at (${x}, ${y}, ${z}), facing ${orientation.label}. `;
+      const finalMessage = biomeHeaderText ? `${biomeHeaderText}${surveyOutput}` : surveyOutput;
+      
       console.log('SurveyCommand: Final message:', finalMessage);
 
       window.dispatchEvent(new CustomEvent("worker-log", { 
@@ -559,6 +649,16 @@ export class SurveyCommand implements CommandHandler {
     }
   }
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

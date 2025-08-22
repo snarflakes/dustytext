@@ -1,10 +1,17 @@
 import { CommandHandler, CommandContext } from './types';
+import { createPublicClient, http } from 'viem';
+import { redstone } from 'viem/chains';
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const ENERGY_TABLE = "Energy";
 
-const SPAWN_ENERGY = 245280000000000000n; // Energy at spawn
+const SPAWN_ENERGY = 245280000000000000n;
+
+const publicClient = createPublicClient({
+  chain: redstone,
+  transport: http(),
+});
 
 const encodePlayerEntityId = (address: string): `0x${string}` => {
   const prefix = "01";
@@ -18,6 +25,39 @@ export class HealthCommand implements CommandHandler {
     try {
       const entityId = encodePlayerEntityId(context.address);
       
+      // First, try a read-only call to check current energy state
+      try {
+        const currentEnergy = await publicClient.readContract({
+          address: WORLD_ADDRESS as `0x${string}`,
+          abi: [{
+            name: 'getEnergy',
+            type: 'function',
+            inputs: [{ name: 'entityId', type: 'bytes32' }],
+            outputs: [{ name: 'energy', type: 'uint256' }]
+          }],
+          functionName: 'getEnergy',
+          args: [entityId]
+        });
+
+        if (currentEnergy === 0n) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `💀 You are dead. Your energy has been completely depleted. Type 'spawn' to be reborn.` 
+          }));
+          return;
+        }
+
+        // If alive, show current energy
+        const percentage = Number((currentEnergy * 100n) / SPAWN_ENERGY);
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `❤️ Energy: ${currentEnergy.toString()} (${percentage.toFixed(1)}%) - Live data` 
+        }));
+        return;
+
+      } catch (readError) {
+        console.log('Health: Read-only call failed, falling back to indexer:', readError);
+      }
+
+      // Fallback to indexer data (may be stale)
       const query = `
         SELECT energy, drainRate, lastUpdatedTime
         FROM "${ENERGY_TABLE}"
@@ -36,7 +76,7 @@ export class HealthCommand implements CommandHandler {
       const table = result?.result?.[0];
       
       if (!Array.isArray(table) || table.length < 2) {
-        throw new Error("No energy record found for this entity.");
+        throw new Error("No energy record found. You may need to spawn first.");
       }
 
       const columns = table[0];
@@ -47,12 +87,18 @@ export class HealthCommand implements CommandHandler {
       const drainRate = BigInt(row.drainRate ?? 0);
       const lastUpdatedTime = BigInt(row.lastUpdatedTime ?? 0);
 
-      // Calculate percentage of spawn energy (can exceed 100%)
-      const percentage = Number((energy * 100n) / SPAWN_ENERGY);
+      if (energy === 0n) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `💀 You are dead (indexer data). Type 'spawn' to be reborn.` 
+        }));
+        return;
+      }
 
+      const percentage = Number((energy * 100n) / SPAWN_ENERGY);
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `❤️ Energy: ${energy.toString()} (${percentage.toFixed(1)}%), 💧 Drain Rate: ${drainRate.toString()}, ⏱️ Last Updated: ${lastUpdatedTime.toString()}` 
+        detail: `❤️ Energy: ${energy.toString()} (${percentage.toFixed(1)}%) - Indexer data (may be stale)` 
       }));
+
     } catch (error) {
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: `❌ Health check failed: ${error}` 
@@ -60,6 +106,7 @@ export class HealthCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

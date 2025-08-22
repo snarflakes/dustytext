@@ -149,7 +149,7 @@ export function App() {
     setInput('');
 
     if (!isConnected) {
-      setLog(prev => [...prev, '🔒 Please connect your wallet first']);
+      setLog(prev => [...prev, '🔒 Please connect your wallet first. Click Sign In in the top right corner.']);
       return;
     }
 

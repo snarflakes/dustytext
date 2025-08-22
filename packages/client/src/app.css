@@ -25,7 +25,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 20px;
+  padding: 10px 20px 2px 20px;
   border-bottom: 1px solid limegreen;
   background: black;
   flex-shrink: 0;
@@ -51,7 +51,7 @@ body {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 15px;
+  padding: 5px 15px 15px 15px;
   white-space: pre-wrap;
   word-wrap: break-word;
   box-sizing: border-box;
@@ -248,5 +248,62 @@ button[data-testid*="connect"]:hover {
   color: #00ff00 !important;
   font-family: 'Courier New', monospace !important;
 }
+
+/* Decorative separator */
+.separator-row {
+  display: flex;
+  align-items: center;
+  padding: 2px 20px 5px 20px;
+  background: black;
+  flex-shrink: 0;
+}
+
+.separator-line {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(to right, transparent, limegreen, transparent);
+  position: relative;
+}
+
+.separator-line::before {
+  content: '═══════════';
+  position: absolute;
+  top: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: limegreen;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  background: black;
+  padding: 0 10px;
+}
+
+.separator-icons {
+  color: limegreen;
+  font-family: 'Courier New', monospace;
+  font-size: 14px;
+  padding: 0 15px;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .separator-row {
+    padding: 6px 12px;
+  }
+  
+  .separator-line::before {
+    content: '═════';
+    font-size: 10px;
+    padding: 0 5px;
+  }
+  
+  .separator-icons {
+    font-size: 12px;
+    padding: 0 10px;
+  }
+}
+
+
+
 
 

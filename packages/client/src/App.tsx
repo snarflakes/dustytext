@@ -36,7 +36,7 @@ declare global {
 
 export function App() {
   const [log, setLog] = useState<string[]>([
-    "🧱 Welcome to Dusty Text MUD",
+    "<i>Welcome to Dusty Text</i>",
     "Type 'spawn' to enter the world! Type 'look' to see your surroundings. Type 'help' for all available commands."
   ]);
   const [input, setInput] = useState('');
@@ -274,7 +274,13 @@ export function App() {
       <div className="mud-container">
         {/* Header */}
         <div className="mud-header-row">
-          <h1 className="mud-title">Dusty Text MUD</h1>
+          <div className="mud-title">
+            <img 
+              src="/dusttext logosmallest.png" 
+              alt="Dusty Text" 
+              style={{ height: '48px', width: 'auto' }}
+            />
+          </div>
           <div className="flex items-center gap-4">
             {isConnected && balanceData && (
               <div className="text-sm">
@@ -283,6 +289,13 @@ export function App() {
             )}
             <AccountButton />
           </div>
+        </div>
+
+        {/* Decorative Separator */}
+        <div className="separator-row">
+          <div className="separator-line"></div>
+          <div className="separator-icons">✦ ✧ ✦</div>
+          <div className="separator-line"></div>
         </div>
 
         {/* Game Area */}

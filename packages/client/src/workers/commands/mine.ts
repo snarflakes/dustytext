@@ -202,7 +202,7 @@ export class MineCommand implements CommandHandler {
         if (errorMessage.includes('Object is not mineable') || 
             errorMessage.includes('4f626a656374206973206e6f74206d696e6561626c6500000000000000000000')) {
           window.dispatchEvent(new CustomEvent("worker-log", { 
-            detail: `❌ There is nothing to mine at your feet.` 
+            detail: `❌ There is nothing to mine at your feet. You can mine below your feet by typing 'mine down'.` 
           }));
           return;
         }

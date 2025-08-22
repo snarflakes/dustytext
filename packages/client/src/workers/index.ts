@@ -75,17 +75,20 @@ async function runWorkerCommand(command: string): Promise<void> {
     return;
   }
 
-  window.dispatchEvent(new CustomEvent("worker-log", { 
-    //detail: `🚀 Starting ${command} for ${address}...`
-    detail: `You start to ${command} ...` 
-  }));
-
   const context = { address, sessionClient };
 
   // Parse command and arguments
   const parts = command.split(' ');
   const commandName = parts[0];
   const args = parts.slice(1);
+
+  // Don't show "You start to..." message for look command
+  if (commandName !== 'look') {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      //detail: `🚀 Starting ${command} for ${address}...`
+      detail: `You start to ${command} ...` 
+    }));
+  }
 
   // Handle special cases for backward compatibility
   if (['north', 'south', 'east', 'west'].includes(commandName)) {

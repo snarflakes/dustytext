@@ -98,7 +98,7 @@ export class HealthCommand implements CommandHandler {
         
         // Any other error means we're alive - now get energy info
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `✅ You are alive! (Cannot mine where your head is)` 
+          detail: `💖 You are alive.` 
         }));
         
         // Now get energy data for display

@@ -67,8 +67,8 @@ export class TillCommand implements CommandHandler {
       const y = Number(pos.y ?? 0);
       const z = Number(pos.z ?? 0);
 
-      // Till the block you're standing on (same coordinates)
-      const packedCoord = packCoord96(x, y, z);
+      // Till the block below you (y - 1)
+      const packedCoord = packCoord96(x, y - 1, z);
 
       const data = encodeFunctionData({
         abi: tillAbi,
@@ -113,3 +113,4 @@ export class TillCommand implements CommandHandler {
     }
   }
 }
+

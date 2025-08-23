@@ -195,6 +195,10 @@ export function App() {
       runCommand(`equip ${toolName}`);
     } else if (command === 'unequip') {
       runCommand('unequip');
+    } else if (command === 'till') {
+      runCommand('till');
+    } else if (command === 'fill') {
+      runCommand('fill');
     } else if (command.startsWith("'")) {
       // Handle speak command directly - remove the leading quote
       const message = command.substring(1);

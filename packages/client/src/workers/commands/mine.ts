@@ -120,7 +120,13 @@ export class MineCommand implements CommandHandler {
 
           // Determine mining position based on target
           mineX = x;
-          mineY = target === 'down' ? y - 1 : y;
+          if (target === 'down') {
+            mineY = y - 1;
+          } else if (target === 'up') {
+            mineY = y + 2;  // Above your head (you occupy y and y+1)
+          } else {
+            mineY = y; // default: mine at feet level
+          }
           mineZ = z;
         }
 
@@ -263,6 +269,7 @@ export class MineCommand implements CommandHandler {
     return { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
   }
 }
+
 
 
 

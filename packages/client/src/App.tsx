@@ -65,8 +65,15 @@ export function App() {
       window.__entryKitSessionClient = sessionClient as unknown as typeof window.__entryKitSessionClient;
       setSessionClient(sessionClient as unknown as Parameters<typeof setSessionClient>[0]);
       console.log('Session client shared globally:', sessionClient);
+      
+      // Auto-execute health command on startup
+      if (address) {
+        setTimeout(() => {
+          runCommand('health');
+        }, 1000);
+      }
     } else {
-      setSessionClient(null); // Clear when not available
+      setSessionClient(null);
     }
     
     const checkEntryKit = () => {
@@ -100,7 +107,7 @@ export function App() {
     };
     
     checkEntryKit();
-  }, [sessionClient, sessionError, sessionLoading]);
+  }, [sessionClient, sessionError, sessionLoading, address]);
 
   useEffect(() => {
     // Test multiple endpoints to isolate the issue
@@ -149,7 +156,7 @@ export function App() {
     setInput('');
 
     if (!isConnected) {
-      setLog(prev => [...prev, '🔒 Please connect your wallet first']);
+      setLog(prev => [...prev, '🔒 Please connect your wallet first. Click Sign In in ']);
       return;
     }
 

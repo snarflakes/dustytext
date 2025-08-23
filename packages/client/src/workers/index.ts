@@ -82,10 +82,9 @@ async function runWorkerCommand(command: string): Promise<void> {
   const commandName = parts[0];
   const args = parts.slice(1);
 
-  // Don't show "You start to..." message for look command
-  if (commandName !== 'look') {
+  // Don't show "You start to..." message for look and health commands
+  if (commandName !== 'look' && commandName !== 'health') {
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      //detail: `🚀 Starting ${command} for ${address}...`
       detail: `You start to ${command} ...` 
     }));
   }

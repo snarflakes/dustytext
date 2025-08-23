@@ -6,6 +6,9 @@ import { formatUnits } from "viem";
 import { chainId, getWorldAddress } from "./common";
 import "tailwindcss/tailwind.css";
 import "./app.css"; // Add this import for the clickable block styles
+import { useLivingPlayersCount } from "./player";
+
+
 
 declare global {
   interface Window {
@@ -35,6 +38,8 @@ declare global {
 }
 
 export function App() {
+  const livingPlayers = useLivingPlayersCount();
+    
   const [log, setLog] = useState<string[]>([
     "<i>Welcome to Dusty Text</i>",
     "Type 'spawn' to enter the world! Type 'look' to see your surroundings. Type 'help' for all available commands."
@@ -156,7 +161,7 @@ export function App() {
     setInput('');
 
     if (!isConnected) {
-      setLog(prev => [...prev, '🔒 Please connect your wallet first. Click Sign In in ']);
+      setLog(prev => [...prev, '🔒 Please connect your wallet first. Click "Sign In" in top corner ']);
       return;
     }
 
@@ -293,6 +298,9 @@ export function App() {
             />
           </div>
           <div className="flex items-center gap-4">
+            {livingPlayers !== null &&(
+             <div className="text-sm">👥 {livingPlayers} players alive</div>
+          )}
             {isConnected && balanceData && (
               <div className="text-sm">
                 💰 {parseFloat(formatUnits(balanceData.value, 18)).toFixed(5)} ETH

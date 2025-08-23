@@ -62,17 +62,19 @@ function encodePlayerEntityId(address: string): `0x${string}` {
   return `0x${prefix}${clean.padEnd(64 - prefix.length, "0")}` as `0x${string}`;
 }
 
-function getOffsetForDirection(direction: string): [number, number] {
+function getOffsetForDirection(direction: string): [number, number, number] {
   switch (direction) {
-    case "north": case "n": return [0, -1];
-    case "east":  case "e": return [1, 0];
-    case "south": case "s": return [0, 1];
-    case "west":  case "w": return [-1, 0];
-    case "northeast": case "ne": return [1, -1];
-    case "northwest": case "nw": return [-1, -1];
-    case "southeast": case "se": return [1, 1];
-    case "southwest": case "sw": return [-1, 1];
-    default: return [0, 0];
+    case "north": case "n": return [0, -1, 0];
+    case "east":  case "e": return [1, 0, 0];
+    case "south": case "s": return [0, 1, 0];
+    case "west":  case "w": return [-1, 0, 0];
+    case "northeast": case "ne": return [1, -1, 0];
+    case "northwest": case "nw": return [-1, -1, 0];
+    case "southeast": case "se": return [1, 1, 0];
+    case "southwest": case "sw": return [-1, 1, 0];
+    case "up": case "u": return [0, 0, 1];
+    case "down": case "d": return [0, 0, -1];
+    default: return [0, 0, 0];
   }
 }
 
@@ -251,20 +253,61 @@ export class ExploreCommand implements CommandHandler {
       const layers = [2, 1, 0, -1, -2];
 
       if (direction) {
-        const valid = ["north","n","east","e","south","s","west","w","northeast","ne","northwest","nw","southeast","se","southwest","sw"];
+        const valid = ["north","n","east","e","south","s","west","w","northeast","ne","northwest","nw","southeast","se","southwest","sw","up","u","down","d"];
         if (!valid.includes(direction.toLowerCase())) {
-          throw new Error(`Invalid direction: ${direction}. Use north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, or southwest/sw.`);
+          throw new Error(`Invalid direction: ${direction}. Use north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u, or down/d.`);
         }
 
-        const [dx, dz] = getOffsetForDirection(direction.toLowerCase());
+        const dir = direction.toLowerCase();
+        
+        // Handle vertical exploration differently
+        if (dir === "up" || dir === "u" || dir === "down" || dir === "d") {
+          const isUp = dir === "up" || dir === "u";
+          const positions: Vec3[] = [];
+          
+          // Collect positions for vertical column (0 to +/-10)
+          for (let offset = 0; offset <= 10; offset++) {
+            const actualOffset = isUp ? offset : -offset;
+            positions.push([x, y + actualOffset, z]);
+          }
+          
+          const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, positions);
+          
+          const lines: string[] = [];
+          lines.push(`Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}):\n`);
+          
+          for (let offset = 0; offset <= 10; offset++) {
+            const actualOffset = isUp ? offset : -offset;
+            const blockType = typeMap.get(encodeBlock([x, y + actualOffset, z]));
+            const blockName = displayName(blockType);
+            const blockData: SelectableBlock = {
+              x: x,
+              y: y + actualOffset,
+              z: z,
+              name: blockName,
+              distance: offset,
+              layer: actualOffset,
+            };
+            const sign = actualOffset >= 0 ? "+" : "";
+            lines.push(`${sign}${actualOffset}: ${createClickableBlock(blockData)}`);
+          }
+          
+          const msg = `<pre class="explore-output">${lines.join("\n")}</pre>`;
+          window.dispatchEvent(new CustomEvent("worker-log", { detail: msg }));
+          return;
+        }
+
+        // Handle horizontal exploration (existing code)
+        const [dx, dz, dy] = getOffsetForDirection(direction.toLowerCase());
         const columns: { distance: number; coord: string; blocks: string[] }[] = [];
 
         // collect all positions for 5-step ray × 5 layers
         const positionsDir: Vec3[] = [];
         for (let distance = 1; distance <= 5; distance++) {
           const tx = x + dx * distance;
+          const ty = y + dy * distance;
           const tz = z + dz * distance;
-          for (const dy of layers) positionsDir.push([tx, y + dy, tz]);
+          for (const layerOffset of layers) positionsDir.push([tx, ty + layerOffset, tz]);
         }
 
         // single batch read + fallback
@@ -273,21 +316,21 @@ export class ExploreCommand implements CommandHandler {
 
         // build output
         for (let distance = 1; distance <= 5; distance++) {
-          const tx = x + dx * distance, tz = z + dz * distance;
+          const tx = x + dx * distance, ty = y + dy * distance, tz = z + dz * distance;
           const column: string[] = [];
-          for (const dy of layers) {
-            const blockName = displayName(typeAt(tx, y + dy, tz));
+          for (const layerOffset of layers) {
+            const blockName = displayName(typeAt(tx, ty + layerOffset, tz));
             const blockData: SelectableBlock = {
               x: tx,
-              y: y + dy,
+              y: ty + layerOffset,
               z: tz,
               name: blockName,
               distance: distance,
-              layer: dy,
+              layer: layerOffset,
             };
             column.push(createClickableBlock(blockData));
           }
-          columns.push({ distance, coord: `(${tx}, ${y}, ${tz})`, blocks: column });
+          columns.push({ distance, coord: `(${tx}, ${ty}, ${tz})`, blocks: column });
         }
 
         const header = `Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}):\n\n`;
@@ -373,6 +416,15 @@ export function clearSelection() {
   isSelectionMode = false;
   console.log("Selection cleared, selectedBlocks length:", selectedBlocks.length);
 }
+
+
+
+
+
+
+
+
+
 
 
 

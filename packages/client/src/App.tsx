@@ -172,10 +172,10 @@ export function App() {
       runCommand('look');
     } else if (command === 'health' || command === 'hp') {
       runCommand('health');
-    } else if (command === 'explore') {
+    } else if (command === 'explore' || command === 'exp') {
       runCommand('explore');
-    } else if (command.startsWith('explore ')) {
-      const direction = command.split(' ')[1];
+    } else if (command.startsWith('explore ') || command.startsWith('exp ')) {
+      const direction = command.startsWith('explore ') ? command.split(' ')[1] : command.split(' ')[1];
       runCommand(`explore ${direction}`);
     } else if (command === 'survey') {
       runCommand('survey');

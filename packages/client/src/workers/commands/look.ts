@@ -5,6 +5,7 @@ import { objectNamesById, getRandomDescriptor, getFlowerDescriptor } from "../..
 import { getBiome } from "../../biomeHelper";
 import { biomeNamesById, getRandomBiomeDescriptor, getRandomBiomeSensory } from "../../biomes";
 import { CommandHandler, CommandContext } from './types';
+import { createCoordLinkHTML } from "../../utils/tileLinksHtml";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
@@ -287,7 +288,8 @@ export class LookCommand implements CommandHandler {
         console.log('LookCommand: Biome header fetch failed:', biomeError);
       }
 
-      const lookOutput = `${terrainLabel}${biomeLabel} You are at (${x}, ${y}, ${z}), facing ${orientation.label}. `;
+      const coordLink = createCoordLinkHTML(x, y, z, 4);
+      const lookOutput = `${terrainLabel}${biomeLabel} You are at ${coordLink}, facing ${orientation.label}. `;
       const finalMessage = biomeHeaderText ? `${biomeHeaderText}${lookOutput}` : lookOutput;
       
       console.log('LookCommand: Final message:', finalMessage);
@@ -303,6 +305,15 @@ export class LookCommand implements CommandHandler {
     }
   }
 }
+
+
+
+
+
+
+
+
+
 
 
 

@@ -179,6 +179,8 @@ export function App() {
       runCommand(`explore ${direction}`);
     } else if (command === 'survey') {
       runCommand('survey');
+    } else if (command === 'water') {
+      runCommand('water');
     } else if (command === 'done') {
       runCommand('done');
     } else if (command === 'help' || command === 'h') {

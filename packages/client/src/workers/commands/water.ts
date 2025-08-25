@@ -141,53 +141,34 @@ let isSelectionMode = false;
 
 export function clearSelection() {
   selectedBlocks = [];
-  isSelectionMode = false;
+  // Clear global flags
+  (globalThis as typeof globalThis & { 
+    waterSelectionMode?: boolean;
+    waterSelectedBlocks?: SelectableBlock[];
+  }).waterSelectionMode = false;
+  (globalThis as typeof globalThis & { 
+    waterSelectionMode?: boolean;
+    waterSelectedBlocks?: SelectableBlock[];
+  }).waterSelectedBlocks = [];
+}
+
+function cell(content: string): string {
+  return content.padEnd(20, ' ').substring(0, 20);
 }
 
 function createClickableBlock(blockData: SelectableBlock): string {
+  if (blockData.name === "Air" || blockData.name === "Empty") return cell(blockData.name);
   const blockDataStr = JSON.stringify(blockData);
-  return `<span class="clickable-block" data-block='${blockDataStr}'>${blockData.name}</span>`;
+  const link = `<span class="clickable-block"
+      data-block='${blockDataStr}'
+      style="text-decoration: underline; cursor: pointer; color: #3b82f6;"
+    >${blockData.name}</span>`;
+  return cell(link);
 }
 
-function handleBlockClick(event: Event) {
-  const customEvent = event as CustomEvent;
-  const blockData = JSON.parse(customEvent.detail.blockData);
-  
-  // Only handle clicks when in water selection mode
-  if (!isSelectionMode) return;
-  
-  // Only allow farmland blocks to be selected
-  if (!blockData.name.toLowerCase().includes('farmland')) {
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `❌ Can only water farmland blocks. ${blockData.name} is not farmland.` 
-    }));
-    return;
-  }
-  
-  if (selectedBlocks.find(b => b.x===blockData.x && b.y===blockData.y && b.z===blockData.z)) {
-    selectedBlocks = selectedBlocks.filter(b => !(b.x===blockData.x && b.y===blockData.y && b.z===blockData.z));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `❌ Removed ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) from watering queue. ${selectedBlocks.length} blocks queued.` 
-    }));
-  } else {
-    selectedBlocks.push(blockData);
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `✅ Added ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) to watering queue. ${selectedBlocks.length} blocks queued.` 
-    }));
-  }
-  
-  if (selectedBlocks.length > 0 && !isSelectionMode) {
-    isSelectionMode = true;
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `💡 Type 'done' when you have selected all farmland blocks to water.` 
-    }));
-  }
-}
+// Remove the unused handleBlockClick function entirely
 
-if (typeof window !== "undefined" && !(window as Window & { waterBlockClickListenerRegistered?: boolean }).waterBlockClickListenerRegistered) {
-  window.addEventListener("block-click", handleBlockClick);
-  (window as Window & { waterBlockClickListenerRegistered?: boolean }).waterBlockClickListenerRegistered = true;
-}
+// Remove the separate listener registration - use the shared one from explore
 
 function displayName(t: number | undefined): string {
   if (typeof t !== "number") return "Air";
@@ -269,37 +250,44 @@ export class WaterCommand implements CommandHandler {
         detail: `💧 Watering interface - Click on farmland blocks to add them to watering queue:` 
       }));
 
+      // Set global water selection mode that the shared block click handler can detect
+      (globalThis as typeof globalThis & { 
+        waterSelectionMode: boolean;
+        waterSelectedBlocks: SelectableBlock[];
+      }).waterSelectionMode = true;
+      (globalThis as typeof globalThis & { 
+        waterSelectionMode: boolean;
+        waterSelectedBlocks: SelectableBlock[];
+      }).waterSelectedBlocks = selectedBlocks;
+
+      // Remove the unused isSelectionMode since we're using global flags
+
+      const report: string[] = [];
       for (const row of directions) {
-        const rowBlocks: string[] = [];
-        for (const dir of row) {
+        const headerLine = row.map(dir => {
           const tx = x + dir.dx, tz = z + dir.dz;
-          const column: string[] = [];
-          
-          for (const dy of layers) {
-            const blockType = typeAtGrid(tx, y + dy, tz);
-            const blockName = displayName(blockType);
-            
-            if (blockName.toLowerCase().includes('farmland')) {
-              const blockData: SelectableBlock = {
-                x: tx,
-                y: y + dy,
-                z: tz,
-                name: blockName,
-              };
-              column.push(createClickableBlock(blockData));
-            } else {
-              column.push(blockName);
-            }
-          }
-          
-          const cellContent = column.length > 0 ? column.join(' ') : 'Air';
-          rowBlocks.push(`${dir.label}: ${cellContent}`);
+          const arrow = dir.label === "YOU" ? "<b style='color: white;'>●</b>" : "";
+          return cell(`${arrow}${dir.label} at (${tx}, ${y}, ${tz})`);
+        }).join(" ");
+
+        const layerLines: string[] = [];
+        for (const dy of layers) {
+          const blockCells = row.map(dir => {
+            const tx = x + dir.dx, tz = z + dir.dz, ty = y + dy;
+            const blockType = typeAtGrid(tx, ty, tz);
+            const name = displayName(blockType);
+            const blockData: SelectableBlock = { x: tx, y: ty, z: tz, name, layer: dy };
+            const clickableBlock = createClickableBlock(blockData);
+            const prefix = (dir.label === "YOU" && (dy === 0 || dy === 1)) ? "YOU:" : "";
+            return cell(`${dy >= 0 ? "+" : ""}${dy}: ${prefix}${clickableBlock}`);
+          });
+          layerLines.push(blockCells.join(" "));
         }
-        
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: rowBlocks.join(' | ') 
-        }));
+        report.push(`${headerLine}\n${layerLines.join("\n")}`);
       }
+
+      const msg = `<pre class="explore-output">💧 Watering interface - Click on farmland blocks:\n\n${report.join("\n\n")}</pre>`;
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: msg }));
 
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: `💡 Click on farmland blocks to select them for watering, then type 'done' to water all selected blocks.` 
@@ -365,6 +353,8 @@ export async function waterSingleBlock(context: CommandContext, block: Selectabl
     return false;
   }
 }
+
+
 
 
 

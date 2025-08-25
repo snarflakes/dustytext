@@ -29,6 +29,7 @@ const OBJECT_TYPES: Record<number, string> = {
   32773: "NeptuniumPick",
   32783: "WoodenHoe",
   32788: "Bucket",
+  32789: "WaterBucket",
   // Add more as needed
 };
 

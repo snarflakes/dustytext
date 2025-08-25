@@ -16,12 +16,12 @@ function tileUrl(x: number, z: number, zoom: number) {
   return `${BASE}/${tileX}/${tileY}/${zc}/tile`;
 }
 
-export function createCoordLinkHTML(x: number, y: number, z: number, zoom: number = 4): string {
+export function createCoordLinkHTML(x: number, y: number, z: number, zoom: number = 1): string {
   const url = tileUrl(x, z, zoom);
   return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline whitespace-nowrap" title="Click to download tile image">(${x}, ${y}, ${z})</a>`;
 }
 
-export function createCoordOnclickHTML(x: number, y: number, z: number, zoom: number = 4): string {
+export function createCoordOnclickHTML(x: number, y: number, z: number, zoom: number = 1): string {
   const url = tileUrl(x, z, zoom);
   const filename = `tile_${x}_${y}_${z}_z${zoom}.png`;
   

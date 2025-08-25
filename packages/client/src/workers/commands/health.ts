@@ -27,6 +27,58 @@ const encodePlayerEntityId = (address: string): `0x${string}` => {
   return `0x${prefix}${padded}` as `0x${string}`;
 };
 
+export interface HealthStatus {
+  isAlive: boolean;
+  lifePercentage: number;
+  energy: bigint;
+}
+
+export async function getHealthStatus(address: string): Promise<HealthStatus> {
+  try {
+    const entityId = encodePlayerEntityId(address);
+    
+    // Just check energy directly from the database
+    const query = `SELECT energy, drainRate, lastUpdatedTime FROM "${ENERGY_TABLE}" WHERE entityId = '${entityId}'`;
+    
+    const response = await fetch(INDEXER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ address: WORLD_ADDRESS, query }])
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      const table = result?.result?.[0];
+      
+      if (Array.isArray(table) && table.length >= 2) {
+        const columns = table[0];
+        const values = table[1];
+        const row = Object.fromEntries(columns.map((key: string, i: number) => [key, values[i]]));
+
+        const energy = BigInt(row.energy ?? 0);
+        const drainRate = BigInt(row.drainRate ?? 0);
+        const lastUpdatedTime = BigInt(row.lastUpdatedTime ?? 0);
+
+        // Calculate optimistic energy
+        const currentTime = BigInt(Date.now());
+        const lastUpdatedTimeMs = lastUpdatedTime * 1000n;
+        const elapsed = (currentTime - lastUpdatedTimeMs) / 1000n;
+        const energyDrained = elapsed * drainRate;
+        const optimisticEnergy = bigIntMax(0n, energy - energyDrained);
+
+        const percentage = Number((optimisticEnergy * 100n) / SPAWN_ENERGY);
+        const isAlive = optimisticEnergy > 0n;
+
+        return { isAlive, lifePercentage: percentage, energy: optimisticEnergy };
+      }
+    }
+
+    return { isAlive: false, lifePercentage: 0, energy: 0n };
+  } catch (error) {
+    return { isAlive: false, lifePercentage: 0, energy: 0n };
+  }
+}
+
 export class HealthCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {
     try {
@@ -148,6 +200,8 @@ export class HealthCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

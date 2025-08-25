@@ -1,3 +1,4 @@
+
 import { createPublicClient, http, type PublicClient } from "viem";
 import { redstone } from "viem/chains";
 import { getTerrainBlockType } from "../../terrain";
@@ -54,10 +55,15 @@ const ENTITY_OBJECT_TYPE_TABLE_ID_OVERRIDE = "0x74620000000000000000000000000000
 const OVERRIDE_FLAG = 0x8000;
 
 function normalizeOverride(raw?: `0x${string}` | null): number | undefined {
-  if (!raw || raw === "0x") return undefined;       // no record
-  const v = Number(BigInt(raw)) & 0xffff;           // uint16
-  const base = v & ~OVERRIDE_FLAG;                  // strip top-bit
-  return base === 0 ? undefined : base;             // 0 => treat as no override
+  if (!raw || raw === "0x") return undefined; // no record
+  const v = BigInt(raw);
+  const u16 = v & 0xffffn;
+
+  // Only trust values that carry the override flag
+  if ((u16 & BigInt(OVERRIDE_FLAG)) === 0n) return undefined;
+
+  const base = Number(u16 & ~BigInt(OVERRIDE_FLAG));
+  return base === 0 ? undefined : base;
 }
 
 async function readEntityObjectTypesMulticall(
@@ -90,10 +96,21 @@ async function resolveObjectTypesFresh(
   positions: Vec3[],
   terrainConcurrency = 12
 ): Promise<Map<`0x${string}`, number | undefined>> {
-  const map = await readEntityObjectTypesMulticall(client, world, positions);
+  // Deduplicate positions by encoded key so we don't query the same spot repeatedly
+  const unique: Vec3[] = [];
+  const seen = new Set<string>();
+  for (const p of positions) {
+    const key = encodeBlock(p);
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(p);
+    }
+  }
+
+  const map = await readEntityObjectTypesMulticall(client, world, unique);
 
   const misses: { pos: Vec3; k: `0x${string}` }[] = [];
-  for (const p of positions) {
+  for (const p of unique) {
     const k = encodeBlock(p);
     if (map.get(k) === undefined) misses.push({ pos: p, k });
   }
@@ -146,281 +163,132 @@ function isWater(blockId: number): boolean {
   return name.includes("water") || name.includes("ocean") || name.includes("sea");
 }
 
-// Horizon sensing phrases
-const phrases = {
-  clear: [
-    "The way ahead feels open and inviting.",
-    "Nothing obvious hinders your path.",
-  ],
-  river: {
-    near: ["A brook cuts across your path, an easy hop or two."],
-    walk: ["A modest river winds ahead; a short wade might do."],
-    trek: ["A broad river holds the far bank at a good walk's distance."],
-    far: ["A wide river sprawls ahead, no easy ford in sight."],
-    endless: ["The river becomes a silver road to the horizon."],
-  },
-  sea: {
-    near: ["The shore begins just ahead; waves nibble at the sand."],
-    walk: ["The coastline unfurls a short walk away."],
-    trek: ["Beyond lies open water, stretching well beyond a simple march."],
-    far: ["The sea extends as far as you can comfortably travel in a day."],
-    endless: ["The sea goes on and on, as if the world forgot to stop."],
-  },
-  mountain: {
-    low: ["The ground lifts gently into the hills."],
-    steep: ["A steep bluff shoulders the path."],
-    sheer: ["A sheer wall of stone commands the way."],
-    towering: ["A towering face looms—mountain in full stature."],
-  },
-};
+// Constants for sea-level checks
+const SEA_LEVEL = 63;
+const SEA_BAND = [SEA_LEVEL - 1, SEA_LEVEL, SEA_LEVEL + 1]; // 62, 63, 64
 
-function seedRand(x: number, y: number) {
-  let s = (x * 73856093) ^ (y * 19349663) ^ 0x9e3779b9;
-  return () => { s ^= s<<13; s ^= s>>>17; s ^= s<<5; return ((s>>>0) % 1_000_000) / 1_000_000; };
+// Helper for axis deltas (x+: east, z-: north)
+function dirDelta(dir: string): [number, number] {
+  switch (dir) {
+    case "north": return [0, -1];
+    case "south": return [0, +1];
+    case "east":  return [+1, 0];
+    case "west":  return [-1, 0];
+    case "northeast": return [+1, -1];
+    case "northwest": return [-1, -1];
+    case "southeast": return [+1, +1];
+    case "southwest": return [-1, +1];
+    default: return [0, 0];
+  }
 }
 
-function pick<T>(arr: T[], r: () => number) { 
-  return arr[Math.floor(r() * arr.length)]; 
-}
-
+// -----------------------------------------------------------------------------
+// Batched horizon sensing
+// -----------------------------------------------------------------------------
 async function senseHorizon(pos: Vec3): Promise<string> {
-  const budget = 30000; // ms - 30 second timeout
   const dirs: Facing[] = ["north", "east", "south", "west"];
   const diagonalDirs = ["northeast", "northwest", "southeast", "southwest"];
   const allDirs = [...dirs, ...diagonalDirs];
-  
-  const timeoutPromise = new Promise<string>(resolve => 
-    setTimeout(() => {
-      console.log('SurveyCommand: Horizon sensing timed out after 30 seconds');
-      resolve("The distant lands blur in haze.");
-    }, budget)
-  );
-  
-  const sensePromise = (async () => {
-    console.log('SurveyCommand: Starting extended water detection at position:', pos);
-    
-    // First check if we're currently in water
-    let currentlyInWater = false;
-    try {
-      const currentPositions: Vec3[] = [[pos[0], pos[1], pos[2]]];
-      const currentTypeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, currentPositions);
-      const currentBlockType = currentTypeMap.get(encodeBlock([pos[0], pos[1], pos[2]]));
-      
-      if (typeof currentBlockType === "number" && isWater(currentBlockType)) {
-        currentlyInWater = true;
-        console.log('SurveyCommand: Currently standing in water');
-      }
-    } catch (error) {
-      console.log('SurveyCommand: Failed to check current position for water:', error);
+
+  console.log('SurveyCommand: Starting water detection at position:', pos);
+
+  // Check key distances only: 10, 20, 30, 40, 50
+  const distances = [4, 6, 10, 20, 30, 40, 50];
+
+  // Build a single batch of ALL positions (local band + sea band) and dedupe
+  const batchPositions: Vec3[] = [];
+  type Target = { dir: string; distance: number; locals: Vec3[]; deeps: Vec3[] };
+  const targets: Target[] = [];
+
+  for (const dir of allDirs) {
+    const [dx, dz] = dirDelta(dir);
+    for (const distance of distances) {
+      const tx = pos[0] + dx * distance;
+      const tz = pos[2] + dz * distance;
+
+      // Local column near player level: y, y-1, y-2
+      const locals: Vec3[] = [
+        [tx, pos[1],     tz],
+        [tx, pos[1] - 1, tz],
+        [tx, pos[1] - 2, tz],
+      ];
+
+      // Deep: sea-level band 62/63/64
+      const deeps: Vec3[] = SEA_BAND.map(Y => [tx, Y, tz] as Vec3);
+
+      // Accumulate
+      for (const p of locals) batchPositions.push(p);
+      for (const p of deeps)  batchPositions.push(p);
+
+      targets.push({ dir, distance, locals, deeps });
     }
-    
-    // Extended water detection - sample every 5 blocks out to 100 blocks
-    const waterResults: Array<{dir: string, distance: number, hasWater: boolean}> = [];
-    
-    for (const dir of allDirs) {
-      let dx = 0, dz = 0;
-      
-      // Handle cardinal and diagonal directions
-      if (dir.includes("north")) dz = -1;
-      if (dir.includes("south")) dz = 1;
-      if (dir.includes("east")) dx = 1;
-      if (dir.includes("west")) dx = -1;
-      
-      // For diagonals, normalize the movement
-      if (dir.includes("north") && dir.includes("east")) { dx = 1; dz = -1; }
-      else if (dir.includes("north") && dir.includes("west")) { dx = -1; dz = -1; }
-      else if (dir.includes("south") && dir.includes("east")) { dx = 1; dz = 1; }
-      else if (dir.includes("south") && dir.includes("west")) { dx = -1; dz = 1; }
-      
-      // Sample positions every 10 blocks from 10 to 100
-      const samplePositions: Vec3[] = [];
-      const distances = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100];
-      
-      for (const distance of distances) {
-        // Check at water level (y) and one below (y-1) for better detection
-        samplePositions.push([pos[0] + (dx * distance), pos[1], pos[2] + (dz * distance)]);
-        samplePositions.push([pos[0] + (dx * distance), pos[1] - 1, pos[2] + (dz * distance)]);
-      }
-      
-      try {
-        const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, samplePositions);
-        
-        // Check each distance for water
-        for (const distance of distances) {
-          const blockType1 = typeMap.get(encodeBlock([pos[0] + (dx * distance), pos[1], pos[2] + (dz * distance)]));
-          const blockType2 = typeMap.get(encodeBlock([pos[0] + (dx * distance), pos[1] - 1, pos[2] + (dz * distance)]));
-          
-          const hasWater = (typeof blockType1 === "number" && isWater(blockType1)) || 
-                          (typeof blockType2 === "number" && isWater(blockType2));
-          
-          if (hasWater) {
-            waterResults.push({ dir, distance, hasWater: true });
-            console.log(`SurveyCommand: Found water ${distance} blocks ${dir}`);
-            break; // Found water in this direction, no need to check further
-          }
-        }
-      } catch (error) {
-        console.log(`SurveyCommand: Failed extended water check ${dir}:`, error);
-      }
+  }
+
+  // Resolve once
+  const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, batchPositions);
+
+  const localWaterResults: Array<{ dir: string; distance: number; hasWater: boolean }> = [];
+  const deepWaterResults: Array<{ dir: string; distance: number; hasWater: boolean }> = [];
+
+  for (const t of targets) {
+    const localIds = t.locals.map(p => typeMap.get(encodeBlock(p)));
+    const deepIds  = t.deeps.map(p  => typeMap.get(encodeBlock(p)));
+
+    const hasLocalWater = localIds.some(b => typeof b === "number" && isWater(b));
+    const hasDeepWater  = deepIds.some(b  => typeof b === "number" && isWater(b));
+
+    if (hasLocalWater) localWaterResults.push({ dir: t.dir, distance: t.distance, hasWater: true });
+    if (hasDeepWater)  deepWaterResults.push({ dir: t.dir, distance: t.distance, hasWater: true });
+  }
+
+  console.log('SurveyCommand: Water detection results:');
+  console.log('Local water results:', localWaterResults);
+  console.log('Deep water results:', deepWaterResults);
+
+  // Group by direction
+  const localByDir = new Map<string, number[]>();
+  const deepByDir  = new Map<string, number[]>();
+
+  localWaterResults.forEach(result => {
+    if (!localByDir.has(result.dir)) localByDir.set(result.dir, []);
+    localByDir.get(result.dir)!.push(result.distance);
+  });
+
+  deepWaterResults.forEach(result => {
+    if (!deepByDir.has(result.dir)) deepByDir.set(result.dir, []);
+    deepByDir.get(result.dir)!.push(result.distance);
+  });
+
+  let waterDescription = "";
+
+  // Report local water with distances
+  if (localByDir.size > 0) {
+    const localDescriptions: string[] = [];
+    for (const [dir, ds] of localByDir) {
+      ds.sort((a, b) => a - b);
+      localDescriptions.push(`${ds.join(', ')} steps ${dir}`);
     }
-    
-    // Check immediate surroundings for terrain features (existing code)
-    const immediateResults: Array<{dir: Facing, terrain: string[], hasWater: boolean, maxHeight: number, minHeight: number}> = [];
-    
-    for (const dir of dirs) {
-      const dx = dir === "east" ? 1 : dir === "west" ? -1 : 0;
-      const dz = dir === "north" ? -1 : dir === "south" ? 1 : 0;
-      
-      const terrain: string[] = [];
-      let hasWater = false;
-      let maxHeight = pos[1];
-      let minHeight = pos[1];
-      
-      try {
-        const layers = [2, 1, 0, -1, -2];
-        const checkPositions: Vec3[] = [];
-        
-        for (let distance = 1; distance <= 3; distance++) {
-          for (const dy of layers) {
-            checkPositions.push([pos[0] + (dx * distance), pos[1] + dy, pos[2] + (dz * distance)]);
-          }
-        }
-        
-        const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, checkPositions);
-        
-        for (let distance = 1; distance <= 3; distance++) {
-          for (const dy of layers) {
-            const checkPos: Vec3 = [pos[0] + (dx * distance), pos[1] + dy, pos[2] + (dz * distance)];
-            const blockType = typeMap.get(encodeBlock(checkPos));
-            
-            if (typeof blockType === "number" && objectNamesById[blockType]) {
-              const blockName = objectNamesById[blockType].toLowerCase();
-              terrain.push(blockName);
-              
-              if (isWater(blockType)) {
-                hasWater = true;
-              }
-              
-              const height = pos[1] + dy;
-              if (height > maxHeight) maxHeight = height;
-              if (height < minHeight) minHeight = height;
-            }
-          }
-        }
-        
-        immediateResults.push({ dir, terrain, hasWater, maxHeight, minHeight });
-      } catch (error) {
-        console.log(`SurveyCommand: Failed to check ${dir} direction:`, error);
-        immediateResults.push({ dir, terrain: [], hasWater: false, maxHeight: pos[1], minHeight: pos[1] });
-      }
+    waterDescription += `Local water detected: ${localDescriptions.join(' and ')}.`;
+  } else {
+    waterDescription += "No local water detected.";
+  }
+
+  // Report deep (sea-level band) water with distances
+  if (deepByDir.size > 0) {
+    if (waterDescription) waterDescription += " ";
+    const deepDescriptions: string[] = [];
+    for (const [dir, ds] of deepByDir) {
+      ds.sort((a, b) => a - b);
+      deepDescriptions.push(`${ds.join(', ')} steps ${dir}`);
     }
-    
-    // Build description with water detection
-    const r = seedRand(pos[0], pos[2]);
-    
-    // Find closest water sources in any direction (get top 2)
-    const sortedWaterResults = waterResults.sort((a, b) => a.distance - b.distance);
-    const closestWaterSources = sortedWaterResults.slice(0, 2);
-    
-    // If we found distant water, mention it
-    if (closestWaterSources.length > 0 && !currentlyInWater) {
-      let waterPhrase = "";
-      if (closestWaterSources.length === 1) {
-        waterPhrase = `A glimmer of water catches your eye, roughly ${closestWaterSources[0].distance} steps to the ${closestWaterSources[0].dir}.`;
-      } else {
-        waterPhrase = `Glimmers of water catch your eye: roughly ${closestWaterSources[0].distance} steps to the ${closestWaterSources[0].dir} and ${closestWaterSources[1].distance} steps to the ${closestWaterSources[1].dir}.`;
-      }
-      
-      // Also check for immediate terrain features
-      const scored = immediateResults.map(r => {
-        let score = 0;
-        let kind = "clear";
-        
-        if (r.hasWater) {
-          score = 10;
-          kind = "river";
-        } else {
-          const heightDiff = r.maxHeight - pos[1];
-          const earthenBlocks = r.terrain.filter(t => 
-            t.includes("stone") || t.includes("rock") || t.includes("granite") || 
-            t.includes("basalt") || t.includes("dirt") || t.includes("clay") || t.includes("gravel")
-          );
-          const earthenPercentage = r.terrain.length > 0 ? (earthenBlocks.length / r.terrain.length) : 0;
-          
-          if (earthenPercentage >= 0.75 && heightDiff >= 2 && r.terrain.length >= 5) {
-            score = 5;
-            kind = "mountain";
-          }
-        }
-        
-        return { ...r, score, kind };
-      });
-      
-      scored.sort((a, b) => b.score - a.score);
-      const best = scored[0];
-      
-      if (best && best.score > 0) {
-        const bestDirName = best.dir.charAt(0).toUpperCase() + best.dir.slice(1);
-        if (best.kind === "mountain") {
-          const mountainPhrase = pick(phrases.mountain.steep, r);
-          return `${waterPhrase} ${bestDirName}: ${mountainPhrase}`;
-        } else if (best.kind === "river") {
-          const riverPhrase = pick(phrases.river.near, r);
-          return `${bestDirName}: ${riverPhrase} ${waterPhrase}`;
-        }
-      }
-      
-      return waterPhrase;
-    }
-    
-    // Fall back to existing immediate terrain analysis
-    const scored = immediateResults.map(r => {
-      let score = 0;
-      let kind = "clear";
-      
-      if (r.hasWater) {
-        score = 10;
-        kind = "river";
-      } else {
-        const heightDiff = r.maxHeight - pos[1];
-        const earthenBlocks = r.terrain.filter(t => 
-          t.includes("stone") || t.includes("rock") || t.includes("granite") || 
-          t.includes("basalt") || t.includes("dirt") || t.includes("clay") || t.includes("gravel")
-        );
-        const earthenPercentage = r.terrain.length > 0 ? (earthenBlocks.length / r.terrain.length) : 0;
-        
-        if (earthenPercentage >= 0.75 && heightDiff >= 2 && r.terrain.length >= 5) {
-          score = 5;
-          kind = "mountain";
-        }
-      }
-      
-      return { ...r, score, kind };
-    });
-    
-    scored.sort((a, b) => b.score - a.score);
-    const best = scored[0];
-    
-    if (best && best.score > 0) {
-      const bestDirName = best.dir.charAt(0).toUpperCase() + best.dir.slice(1);
-      if (best.kind === "mountain") {
-        const mountainPhrase = pick(phrases.mountain.steep, r);
-        return `${bestDirName}: ${mountainPhrase}`;
-      } else if (best.kind === "river") {
-        const riverPhrase = pick(phrases.river.near, r);
-        return `${bestDirName}: ${riverPhrase}`;
-      }
-    }
-    
-    // No water found within scanning range
-    if (!currentlyInWater && waterResults.length === 0) {
-      return "No water sources detected within 100 steps. " + pick(phrases.clear, r);
-    }
-    
-    return pick(phrases.clear, r);
-  })();
-  
-  return Promise.race([sensePromise, timeoutPromise]);
+    waterDescription += `Deep water (sea level) detected: ${deepDescriptions.join(' and ')}.`;
+  } else {
+    if (waterDescription) waterDescription += " ";
+    waterDescription += "No deep water detected.";
+  }
+
+  console.log('SurveyCommand: Final water description:', waterDescription);
+  return waterDescription;
 }
 
 export class SurveyCommand implements CommandHandler {
@@ -557,7 +425,7 @@ export class SurveyCommand implements CommandHandler {
         console.log('SurveyCommand: Biome fetch failed:', biomeError);
       }
 
-      // Perform horizon sensing
+      // Perform horizon sensing (batched)
       const horizonDescription = await senseHorizon([x, y, z]);
 
       // Check what's above the player
@@ -649,38 +517,6 @@ export class SurveyCommand implements CommandHandler {
     }
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

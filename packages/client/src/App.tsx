@@ -6,6 +6,9 @@ import { formatUnits } from "viem";
 import { chainId, getWorldAddress } from "./common";
 import "tailwindcss/tailwind.css";
 import "./app.css"; // Add this import for the clickable block styles
+import { useLivingPlayersCount } from "./player";
+
+
 
 declare global {
   interface Window {
@@ -35,6 +38,8 @@ declare global {
 }
 
 export function App() {
+  const livingPlayers = useLivingPlayersCount();
+    
   const [log, setLog] = useState<string[]>([
     "<i>Welcome to Dusty Text</i>",
     "Type 'spawn' to enter the world! Type 'look' to see your surroundings. Type 'help' for all available commands."
@@ -156,7 +161,7 @@ export function App() {
     setInput('');
 
     if (!isConnected) {
-      setLog(prev => [...prev, '🔒 Please connect your wallet first. Click Sign In in ']);
+      setLog(prev => [...prev, '🔒 Please connect your wallet first. Click "Sign In" in top corner ']);
       return;
     }
 
@@ -167,13 +172,15 @@ export function App() {
       runCommand('look');
     } else if (command === 'health' || command === 'hp') {
       runCommand('health');
-    } else if (command === 'explore') {
+    } else if (command === 'explore' || command === 'exp') {
       runCommand('explore');
-    } else if (command.startsWith('explore ')) {
-      const direction = command.split(' ')[1];
+    } else if (command.startsWith('explore ') || command.startsWith('exp ')) {
+      const direction = command.startsWith('explore ') ? command.split(' ')[1] : command.split(' ')[1];
       runCommand(`explore ${direction}`);
     } else if (command === 'survey') {
       runCommand('survey');
+    } else if (command === 'water') {
+      runCommand('water');
     } else if (command === 'done') {
       runCommand('done');
     } else if (command === 'help' || command === 'h') {
@@ -195,6 +202,12 @@ export function App() {
       runCommand(`equip ${toolName}`);
     } else if (command === 'unequip') {
       runCommand('unequip');
+    } else if (command === 'till') {
+      runCommand('till');
+    } else if (command === 'fill') {
+      runCommand('fill');
+    } else if (command === 'build') {
+      runCommand('build');
     } else if (command.startsWith("'")) {
       // Handle speak command directly - remove the leading quote
       const message = command.substring(1);
@@ -289,6 +302,9 @@ export function App() {
             />
           </div>
           <div className="flex items-center gap-4">
+            {livingPlayers !== null &&(
+             <div className="text-sm">👥 {livingPlayers} players alive</div>
+          )}
             {isConnected && balanceData && (
               <div className="text-sm">
                 💰 {parseFloat(formatUnits(balanceData.value, 18)).toFixed(5)} ETH

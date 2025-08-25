@@ -7,6 +7,7 @@ const INVENTORY_SLOT_TABLE = "InventorySlot";
 // Import OBJECT_TYPES from the correct location
 const OBJECT_TYPES: Record<number, string> = {
   21: "Grass",
+  22: "Dirt",
   51: "BirchLog",
   56: "DarkOakLog", 
   58: "OakLeaf",
@@ -29,6 +30,8 @@ const OBJECT_TYPES: Record<number, string> = {
   32773: "NeptuniumPick",
   32783: "WoodenHoe",
   32788: "Bucket",
+  32789: "WaterBucket",
+
   // Add more as needed
 };
 

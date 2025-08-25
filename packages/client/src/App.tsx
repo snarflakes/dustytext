@@ -206,6 +206,8 @@ export function App() {
       runCommand('till');
     } else if (command === 'fill') {
       runCommand('fill');
+    } else if (command === 'build') {
+      runCommand('build');
     } else if (command.startsWith("'")) {
       // Handle speak command directly - remove the leading quote
       const message = command.substring(1);

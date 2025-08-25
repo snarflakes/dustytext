@@ -1,12 +1,13 @@
 import { encodeFunctionData, parseAbi } from 'viem';
 import { CommandHandler, CommandContext } from './types';
+import { packCoord96 } from './chunkCommit';
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
 const POSITION_TABLE = "EntityPosition";
 
-const waterAbi = parseAbi([
-  'function wetFarmland(bytes32 caller, uint96 coord, uint16 bucketSlot) returns (bytes32)',
+const buildAbi = parseAbi([
+  'function build(bytes32 caller, uint96 coord, uint16 slot, bytes extraData) returns (bytes32)',
 ]);
 
 function encodePlayerEntityId(address: string): `0x${string}` {
@@ -15,24 +16,17 @@ function encodePlayerEntityId(address: string): `0x${string}` {
   return `0x${prefix}${clean.padEnd(64 - prefix.length, "0")}` as `0x${string}`;
 }
 
-function packCoord96(x: number, y: number, z: number): bigint {
-  const X = BigInt.asUintN(32, BigInt(x));
-  const Y = BigInt.asUintN(32, BigInt(y)); 
-  const Z = BigInt.asUintN(32, BigInt(z));
-  return (X << 64n) | (Y << 32n) | Z;
-}
-
-export class WaterCommand implements CommandHandler {
+export class BuildCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {
     try {
       const entityId = encodePlayerEntityId(context.address);
       
-      // Check for equipped water bucket
+      // Check for equipped block/item
       const equippedTool = (globalThis as typeof globalThis & { equippedTool: { slot: number; type: string; name: string } | null }).equippedTool;
       
-      if (!equippedTool || !equippedTool.type.toLowerCase().includes('water') || !equippedTool.type.toLowerCase().includes('bucket')) {
+      if (!equippedTool) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "❌ You must equip a water bucket to water farmland. Use 'equip water bucket' first." 
+          detail: "❌ You must equip a block or item to build. Use 'equip <item>' first." 
         }));
         return;
       }
@@ -67,13 +61,21 @@ export class WaterCommand implements CommandHandler {
       const y = Number(pos.y ?? 0);
       const z = Number(pos.z ?? 0);
 
-      // Water the block below you (y - 1)
-      const coord = packCoord96(x, y - 1, z);
+      // Build at y + 1 (above player)
+      const buildX = x;
+      const buildY = y;
+      const buildZ = z;
+      const packedCoord = packCoord96(buildX, buildY, buildZ);
+
+      console.log(`Building at coordinates: (${buildX}, ${buildY}, ${buildZ})`);
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: `🔍 Attempting to build ${equippedTool.type} at (${buildX}, ${buildY}, ${buildZ})...` 
+      }));
 
       const data = encodeFunctionData({
-        abi: waterAbi,
-        functionName: 'wetFarmland',
-        args: [entityId, coord, equippedTool.slot],
+        abi: buildAbi,
+        functionName: 'build',
+        args: [entityId, packedCoord, equippedTool.slot, '0x'],
       });
 
       const txHash = await context.sessionClient.sendTransaction({
@@ -83,10 +85,10 @@ export class WaterCommand implements CommandHandler {
       });
 
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `� Watered farmland at (${x}, ${y - 1}, ${z}) using ${equippedTool.type}. Tx: ${txHash}` 
+        detail: `🏗️ Built ${equippedTool.type} at (${x}, ${y}, ${z}). Tx: ${txHash}` 
       }));
 
-      // Auto-look after watering
+      // Auto-look after building
       await new Promise(resolve => setTimeout(resolve, 1000));
       const { getCommand } = await import('./registry');
       const lookCommand = getCommand('look');
@@ -97,20 +99,40 @@ export class WaterCommand implements CommandHandler {
     } catch (error) {
       const errorMessage = String(error);
       
-      if (errorMessage.includes('Not farmland')) {
+      // Check for blocked path error (same as move command)
+      if (errorMessage.includes('0xfdde54e2d7cc093a') || 
+          errorMessage.includes('reverted during simulation with reason: 0xfdde54e2d7cc093a')) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "❌ The block below you is not farmland. Use 'till' first to create farmland." 
+          detail: "❌ Cannot build here - space is already occupied or blocked." 
         }));
-      } else if (errorMessage.includes('Must use a Water Bucket')) {
+        return;
+      }
+      
+      if (errorMessage.includes('Cannot build non-block object')) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "❌ You must equip a water bucket to water farmland." 
+          detail: "❌ You can only build with block items, not tools or other objects." 
+        }));
+      } else if (errorMessage.includes('Can only build on air or water')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: "❌ Cannot build here - space is already occupied." 
+        }));
+      } else if (errorMessage.includes('Cannot build where there are dropped objects')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: "❌ Cannot build where items are on the ground." 
+        }));
+      } else if (errorMessage.includes('Cannot build on a movable entity')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: "❌ Cannot build where an entity is standing." 
         }));
       } else {
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `❌ Water failed: ${error}` 
+          detail: `❌ Build failed: ${error}` 
         }));
       }
     }
   }
 }
+
+
+
 

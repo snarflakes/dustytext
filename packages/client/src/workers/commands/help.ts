@@ -17,6 +17,7 @@ export class HelpCommand implements CommandHandler {
       '       Till (prepare farmland with equipped hoe),',
       '       Fill (fill equipped bucket with water when standing in water),',
       '       Water (water farmland blocks with equipped water bucket - shows clickable grid),',
+      '       Build (place equipped block above you),',
       '       Mine down (harvest the block beneath you),',
       '       Craft (create new items from your inventory),',
       '       Equip (use a tool from your inventory. Try using axe for wood, and a pick for seed harvesting),',
@@ -34,6 +35,7 @@ export class HelpCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

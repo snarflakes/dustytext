@@ -7,7 +7,7 @@ import { chainId, getWorldAddress } from "./common";
 import "tailwindcss/tailwind.css";
 import "./app.css"; // Add this import for the clickable block styles
 import { useLivingPlayersCount } from "./player";
-
+import { getHealthStatus, HealthStatus } from './workers/commands/health';
 
 
 declare global {
@@ -39,7 +39,8 @@ declare global {
 
 export function App() {
   const livingPlayers = useLivingPlayersCount();
-    
+  const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
+
   const [log, setLog] = useState<string[]>([
     "<i>Welcome to Dusty Text</i>",
     "Type 'spawn' to enter the world! Type 'look' to see your surroundings. Type 'help' for all available commands."
@@ -149,6 +150,23 @@ export function App() {
     
     testConnectivity();
   }, []);
+
+  // Health status polling
+  useEffect(() => {
+    if (!address || !isConnected) return;
+    
+    const updateHealth = async () => {
+      const status = await getHealthStatus(address);
+      setHealthStatus(status);
+    };
+    
+    // Initial load
+    updateHealth();
+    
+    // Update every 60 seconds
+    const interval = setInterval(updateHealth, 60000);
+    return () => clearInterval(interval);
+  }, [address, isConnected]);
 
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
@@ -302,6 +320,11 @@ export function App() {
             />
           </div>
           <div className="flex items-center gap-4">
+            {healthStatus && (
+              <div className="text-sm">
+                ❤️ {healthStatus.lifePercentage.toFixed(1)}%
+              </div>
+            )}
             {livingPlayers !== null &&(
              <div className="text-sm">👥 {livingPlayers} players alive</div>
           )}

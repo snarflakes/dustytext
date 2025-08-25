@@ -1,6 +1,7 @@
-### Dusty Text
+<img width="180" height="120" alt="dusttext logosmallest" src="https://github.com/user-attachments/assets/8548d4dd-6d34-44d6-8016-e3da2efaf1a0" />
 
 **DIVE into a text based MUD of yore, updated to the modern onchain DUST world. Energy is conserved. Death comes quick. So walk around and explore the beauty of the DUST world.  All through a custom narrative lens of biomes and terrain.** 
+
 
 
 

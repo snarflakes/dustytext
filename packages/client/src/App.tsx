@@ -151,12 +151,23 @@ export function App() {
     testConnectivity();
   }, []);
 
-  // Health status polling
+  // Health status polling - use session client address instead of wagmi address
   useEffect(() => {
-    if (!address || !isConnected) return;
+    console.log('Health polling useEffect triggered', { sessionClient, isConnected });
+    
+    // Get address from session client instead of wagmi
+    const sessionAddress = sessionClient?.account?.address || 
+                          (typeof sessionClient?.account === 'string' ? sessionClient.account : null);
+    
+    if (!sessionAddress || !isConnected) {
+      console.log('Health polling skipped - no session address or not connected');
+      return;
+    }
     
     const updateHealth = async () => {
-      const status = await getHealthStatus(address);
+      console.log('updateHealth called for session address:', sessionAddress);
+      const status = await getHealthStatus(sessionAddress);
+      console.log('Health status received:', status);
       setHealthStatus(status);
     };
     
@@ -165,8 +176,12 @@ export function App() {
     
     // Update every 60 seconds
     const interval = setInterval(updateHealth, 60000);
-    return () => clearInterval(interval);
-  }, [address, isConnected]);
+    console.log('Health polling interval set:', interval);
+    return () => {
+      console.log('Health polling interval cleared');
+      clearInterval(interval);
+    };
+  }, [sessionClient, isConnected]);
 
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
@@ -320,9 +335,14 @@ export function App() {
             />
           </div>
           <div className="flex items-center gap-4">
-            {healthStatus && (
+            {healthStatus && healthStatus.isAlive && (
               <div className="text-sm">
                 ❤️ {healthStatus.lifePercentage.toFixed(1)}%
+              </div>
+            )}
+            {healthStatus && !healthStatus.isAlive && (
+              <div className="text-sm">
+                💀 Dead
               </div>
             )}
             {livingPlayers !== null &&(

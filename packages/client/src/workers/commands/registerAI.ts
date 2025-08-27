@@ -1,0 +1,596 @@
+import { CommandHandler, CommandContext } from './types';
+
+export interface AIConfig {
+  provider: 'OpenAI' | 'Azure OpenAI' | 'OpenRouter' | 'Custom';
+  apiKey: string;
+  model: string;
+  temperature: number;
+  maxTokens: number;
+  systemPrompt: string;
+  rememberSettings: boolean;
+  
+  // Azure OpenAI specific
+  endpoint?: string;
+  deploymentName?: string;
+  apiVersion?: string;
+  
+  // Custom/OpenRouter specific
+  baseUrl?: string;
+  extraHeaders?: Record<string, string>;
+  
+  // Optional settings
+  rateLimit?: number;
+  retryPolicy?: number;
+  debugLogging?: boolean;
+}
+
+// In-memory storage (lost on disconnect)
+let aiConfig: AIConfig | null = null;
+
+// Setup state management
+interface SetupState {
+  step: number;
+  config: Partial<AIConfig>;
+  isActive: boolean;
+}
+
+let setupState: SetupState = {
+  step: 0,
+  config: {},
+  isActive: false
+};
+
+const DEFAULT_SYSTEM_PROMPT = `You are an AI assistant helping a player in a text-based survival game called Dusty Text. 
+Your role is to analyze the game state and suggest single commands to help the player survive and thrive.
+
+Key survival priorities:
+1. Find water and food sources
+2. Gather basic materials (wood, stone)
+3. Craft essential tools
+4. Build shelter
+5. Explore safely
+
+Always respond with exactly ONE command that the player should execute next. 
+Available commands include: look, explore, move, mine, craft, build, inventory, health, survey, and others.
+Be concise and strategic in your suggestions.`;
+
+export class RegisterAICommand implements CommandHandler {
+  async execute(context: CommandContext, ...args: string[]): Promise<void> {
+    const subCommand = args[0]?.toLowerCase();
+    
+    if (subCommand === 'status') {
+      this.showStatus();
+      return;
+    }
+    
+    if (subCommand === 'clear') {
+      aiConfig = null;
+      setupState = { step: 0, config: {}, isActive: false };
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "🤖 AI configuration cleared" 
+      }));
+      return;
+    }
+
+    if (subCommand === 'cancel') {
+      setupState = { step: 0, config: {}, isActive: false };
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "🤖 AI setup cancelled" 
+      }));
+      return;
+    }
+    
+    // Handle setup responses
+    if (setupState.isActive) {
+      this.handleSetupInput(args.join(' '));
+      return;
+    }
+    
+    // Start interactive setup
+    this.startInteractiveSetup();
+  }
+  
+  private showStatus(): void {
+    if (!aiConfig) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "🤖 No AI configuration set. Use 'registerai' to configure." 
+      }));
+      return;
+    }
+    
+    const status = [
+      "🤖 Current AI Configuration:",
+      `  Provider: ${aiConfig.provider}`,
+      `  Model: ${aiConfig.model}`,
+      `  Temperature: ${aiConfig.temperature}`,
+      `  Max Tokens: ${aiConfig.maxTokens}`,
+      `  Rate Limit: ${aiConfig.rateLimit || 1000}ms`,
+      `  Debug Logging: ${aiConfig.debugLogging ? 'Yes' : 'No'}`,
+      `  Remember Settings: ${aiConfig.rememberSettings ? 'Yes' : 'No'}`,
+    ];
+    
+    if (aiConfig.provider === 'Azure OpenAI') {
+      status.push(`  Endpoint: ${aiConfig.endpoint || 'Not set'}`);
+      status.push(`  Deployment: ${aiConfig.deploymentName || 'Not set'}`);
+      status.push(`  API Version: ${aiConfig.apiVersion || 'Not set'}`);
+    }
+    
+    if (aiConfig.provider === 'Custom' || aiConfig.provider === 'OpenRouter') {
+      status.push(`  Base URL: ${aiConfig.baseUrl || 'Not set'}`);
+    }
+    
+    status.forEach(line => {
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: line }));
+    });
+  }
+  
+  private startInteractiveSetup(): void {
+    setupState = { step: 1, config: {}, isActive: true };
+    
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "🤖 AI Configuration Setup" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Type 'registerai cancel' at any time to exit setup." 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "" 
+    }));
+    
+    this.showStep1();
+  }
+
+  private handleSetupInput(input: string): void {
+    const trimmed = input.trim();
+    
+    switch (setupState.step) {
+      case 1: // Provider selection
+        this.handleProviderSelection(trimmed);
+        break;
+      case 2: // API Key
+        this.handleApiKey(trimmed);
+        break;
+      case 3: // Model
+        this.handleModel(trimmed);
+        break;
+      case 4: // Temperature
+        this.handleTemperature(trimmed);
+        break;
+      case 5: // Max Tokens
+        this.handleMaxTokens(trimmed);
+        break;
+      case 6: // Azure/Custom specific settings
+        this.handleProviderSpecific(trimmed);
+        break;
+      case 7: // Rate limit
+        this.handleRateLimit(trimmed);
+        break;
+      case 8: // Retry policy
+        this.handleRetryPolicy(trimmed);
+        break;
+      case 9: // Debug logging
+        this.handleDebugLogging(trimmed);
+        break;
+      case 10: // Remember settings
+        this.handleRememberSettings(trimmed);
+        break;
+      case 11: // System prompt
+        this.handleSystemPrompt(trimmed);
+        break;
+    }
+  }
+
+  private showStep1(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 1/11: Select AI Provider" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "1. OpenAI (standard GPT models)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "2. Azure OpenAI (enterprise deployment)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "3. OpenRouter (access to multiple models)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "4. Custom (local LM Studio, etc.)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter choice (1-4): registerai [number]" 
+    }));
+  }
+
+  private handleProviderSelection(input: string): void {
+    const choice = parseInt(input);
+    const providers = ['OpenAI', 'Azure OpenAI', 'OpenRouter', 'Custom'] as const;
+    
+    if (choice >= 1 && choice <= 4) {
+      setupState.config.provider = providers[choice - 1];
+      setupState.step = 2;
+      this.showStep2();
+    } else {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Invalid choice. Enter 1, 2, 3, or 4: registerai [number]" 
+      }));
+    }
+  }
+
+  private showStep2(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: `Step 2/11: API Key for ${setupState.config.provider}` 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter your API key: registerai [your-api-key]" 
+    }));
+    
+    if (setupState.config.provider === 'OpenAI') {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "💡 Get your key at: https://platform.openai.com/api-keys" 
+      }));
+    }
+  }
+
+  private handleApiKey(input: string): void {
+    if (input.length < 10) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ API key seems too short. Please enter a valid API key: registerai [your-api-key]" 
+      }));
+      return;
+    }
+    
+    setupState.config.apiKey = input;
+    setupState.step = 3;
+    this.showStep3();
+  }
+
+  private showStep3(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 3/11: Model Selection" 
+    }));
+    
+    const suggestions = {
+      'OpenAI': 'gpt-4o-mini, gpt-4o, gpt-3.5-turbo',
+      'Azure OpenAI': 'gpt-4, gpt-35-turbo (deployment name)',
+      'OpenRouter': 'openai/gpt-4o-mini, anthropic/claude-3-sonnet',
+      'Custom': 'depends on your local setup'
+    };
+    
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: `Suggested models: ${suggestions[setupState.config.provider!]}` 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter model name: registerai [model-name]" 
+    }));
+  }
+
+  private handleModel(input: string): void {
+    if (!input) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Model name cannot be empty: registerai [model-name]" 
+      }));
+      return;
+    }
+    
+    setupState.config.model = input;
+    setupState.step = 4;
+    this.showStep4();
+  }
+
+  private showStep4(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 4/11: Temperature (creativity level)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "0.0 = deterministic, 1.0 = very creative (default: 0.3)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter temperature (0-1): registerai [number]" 
+    }));
+  }
+
+  private handleTemperature(input: string): void {
+    const temp = parseFloat(input);
+    if (isNaN(temp) || temp < 0 || temp > 1) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Temperature must be between 0 and 1: registerai [number]" 
+      }));
+      return;
+    }
+    
+    setupState.config.temperature = temp;
+    setupState.step = 5;
+    this.showStep5();
+  }
+
+  private showStep5(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 5/11: Max Tokens per Response" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "32-64 recommended for single commands (default: 50)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter max tokens: registerai [number]" 
+    }));
+  }
+
+  private handleMaxTokens(input: string): void {
+    const tokens = parseInt(input);
+    if (isNaN(tokens) || tokens < 1 || tokens > 1000) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Max tokens must be between 1 and 1000: registerai [number]" 
+      }));
+      return;
+    }
+    
+    setupState.config.maxTokens = tokens;
+    
+    // Skip to step 7 for OpenAI, handle provider-specific for others
+    if (setupState.config.provider === 'OpenAI') {
+      setupState.step = 7;
+      this.showStep7();
+    } else {
+      setupState.step = 6;
+      this.showStep6();
+    }
+  }
+
+  private showStep6(): void {
+    const provider = setupState.config.provider!;
+    
+    if (provider === 'Azure OpenAI') {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "Step 6/11: Azure OpenAI Configuration" 
+      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "Enter endpoint URL: registerai [https://your-resource.openai.azure.com/]" 
+      }));
+    } else if (provider === 'Custom' || provider === 'OpenRouter') {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "Step 6/11: Base URL Configuration" 
+      }));
+      const example = provider === 'Custom' ? 'http://localhost:1234/v1' : 'https://openrouter.ai/api/v1';
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: `Enter base URL (e.g., ${example}): registerai [url]` 
+      }));
+    }
+  }
+
+  private handleProviderSpecific(input: string): void {
+    const provider = setupState.config.provider!;
+    
+    if (provider === 'Azure OpenAI') {
+      if (!setupState.config.endpoint) {
+        setupState.config.endpoint = input;
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: "Enter deployment name: registerai [deployment-name]" 
+        }));
+        return;
+      } else if (!setupState.config.deploymentName) {
+        setupState.config.deploymentName = input;
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: "Enter API version (e.g., 2024-02-15-preview): registerai [version]" 
+        }));
+        return;
+      } else {
+        setupState.config.apiVersion = input;
+      }
+    } else {
+      setupState.config.baseUrl = input;
+    }
+    
+    setupState.step = 7;
+    this.showStep7();
+  }
+
+  private showStep7(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 7/11: Rate Limiting" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Minimum delay between AI calls in milliseconds (default: 1000)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter rate limit: registerai [milliseconds]" 
+    }));
+  }
+
+  private handleRateLimit(input: string): void {
+    const limit = parseInt(input);
+    if (isNaN(limit) || limit < 100 || limit > 10000) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Rate limit must be between 100 and 10000ms: registerai [number]" 
+      }));
+      return;
+    }
+    
+    setupState.config.rateLimit = limit;
+    setupState.step = 8;
+    this.showStep8();
+  }
+
+  private showStep8(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 8/11: Retry Policy" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Number of retries on failure (default: 2)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter retry count: registerai [number]" 
+    }));
+  }
+
+  private handleRetryPolicy(input: string): void {
+    const retries = parseInt(input);
+    if (isNaN(retries) || retries < 0 || retries > 5) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Retry count must be between 0 and 5: registerai [number]" 
+      }));
+      return;
+    }
+    
+    setupState.config.retryPolicy = retries;
+    setupState.step = 9;
+    this.showStep9();
+  }
+
+  private showStep9(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 9/11: Debug Logging" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Log AI prompts and responses to console for debugging?" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter y/n: registerai [y/n]" 
+    }));
+  }
+
+  private handleDebugLogging(input: string): void {
+    const choice = input.toLowerCase();
+    if (choice !== 'y' && choice !== 'n' && choice !== 'yes' && choice !== 'no') {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Enter 'y' for yes or 'n' for no: registerai [y/n]" 
+      }));
+      return;
+    }
+    
+    setupState.config.debugLogging = choice === 'y' || choice === 'yes';
+    setupState.step = 10;
+    this.showStep10();
+  }
+
+  private showStep10(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 10/11: Remember Settings" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Save configuration to browser localStorage?" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter y/n: registerai [y/n]" 
+    }));
+  }
+
+  private handleRememberSettings(input: string): void {
+    const choice = input.toLowerCase();
+    if (choice !== 'y' && choice !== 'n' && choice !== 'yes' && choice !== 'no') {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Enter 'y' for yes or 'n' for no: registerai [y/n]" 
+      }));
+      return;
+    }
+    
+    setupState.config.rememberSettings = choice === 'y' || choice === 'yes';
+    setupState.step = 11;
+    this.showStep11();
+  }
+
+  private showStep11(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Step 11/11: System Prompt" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Use default survival strategy prompt? (recommended)" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Enter y for default, or n to enter custom: registerai [y/n]" 
+    }));
+  }
+
+  private handleSystemPrompt(input: string): void {
+    const choice = input.toLowerCase();
+    
+    if (choice === 'y' || choice === 'yes') {
+      setupState.config.systemPrompt = DEFAULT_SYSTEM_PROMPT;
+      this.completeSetup();
+    } else if (choice === 'n' || choice === 'no') {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "Enter your custom system prompt: registerai [your prompt]" 
+      }));
+      setupState.step = 12; // Custom prompt step
+    } else if (setupState.step === 12) {
+      // Handle custom prompt input
+      setupState.config.systemPrompt = input;
+      this.completeSetup();
+    } else {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Enter 'y' for default or 'n' for custom: registerai [y/n]" 
+      }));
+    }
+  }
+
+  private completeSetup(): void {
+    // Validate required fields
+    const config = setupState.config as AIConfig;
+    
+    if (!config.provider || !config.apiKey || !config.model || 
+        config.temperature === undefined || !config.maxTokens || !config.systemPrompt) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Setup incomplete. Missing required fields." 
+      }));
+      return;
+    }
+
+    // Set defaults for optional fields
+    config.rateLimit = config.rateLimit || 1000;
+    config.retryPolicy = config.retryPolicy || 2;
+    config.debugLogging = config.debugLogging || false;
+    config.rememberSettings = config.rememberSettings || false;
+
+    // Save configuration
+    setAIConfig(config);
+    
+    // Reset setup state
+    setupState = { step: 0, config: {}, isActive: false };
+    
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "✅ AI configuration completed successfully!" 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: `🤖 ${config.provider} configured with model ${config.model}` 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "Use 'registerai status' to view settings." 
+    }));
+    
+    if (config.rememberSettings) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "💾 Settings saved to browser localStorage." 
+      }));
+    }
+  }
+}
+
+// Export functions for future AI mode integration
+export function getAIConfig(): AIConfig | null {
+  return aiConfig;
+}
+
+export function setAIConfig(config: AIConfig): void {
+  aiConfig = config;
+  
+  if (config.rememberSettings) {
+    try {
+      localStorage.setItem('dustytext-ai-config', JSON.stringify(config));
+    } catch (error) {
+      console.warn('Failed to save AI config to localStorage:', error);
+    }
+  }
+}
+
+export function loadAIConfigFromStorage(): void {
+  try {
+    const stored = localStorage.getItem('dustytext-ai-config');
+    if (stored) {
+      aiConfig = JSON.parse(stored);
+    }
+  } catch (error) {
+    console.warn('Failed to load AI config from localStorage:', error);
+  }
+}
+
+// Initialize from localStorage on module load
+loadAIConfigFromStorage();

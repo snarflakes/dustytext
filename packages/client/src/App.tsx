@@ -249,6 +249,9 @@ export function App() {
       } else {
         setLog(prev => [...prev, `<span class="speak-prefix">You say,</span> <span class="speak-message">"${message}"</span>`]);
       }
+    } else if (command.startsWith('registerai')) {
+      const args = command.split(' ').slice(1);
+      runCommand(`registerai ${args.join(' ')}`);
     }
     // Game commands
     else if (command === 'players' || command === 'who') {

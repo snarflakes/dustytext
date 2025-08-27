@@ -197,7 +197,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "4. Custom (local LM Studio, etc.)" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter choice (1-4): registerai [number]" 
+      detail: "Enter choice (1-4):" 
     }));
   }
 
@@ -221,7 +221,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: `Step 2/11: API Key for ${setupState.config.provider}` 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter your API key: registerai [your-api-key]" 
+      detail: "Enter your API key:" 
     }));
     
     if (setupState.config.provider === 'OpenAI') {
@@ -260,7 +260,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: `Suggested models: ${suggestions[setupState.config.provider!]}` 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter model name: registerai [model-name]" 
+      detail: "Enter model name:" 
     }));
   }
 
@@ -285,7 +285,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "0.0 = deterministic, 1.0 = very creative (default: 0.3)" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter temperature (0-1): registerai [number]" 
+      detail: "Enter temperature (0-1):" 
     }));
   }
 
@@ -311,7 +311,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "32-64 recommended for single commands (default: 50)" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter max tokens: registerai [number]" 
+      detail: "Enter max tokens:" 
     }));
   }
 
@@ -540,6 +540,32 @@ export class RegisterAICommand implements CommandHandler {
     config.debugLogging = config.debugLogging || false;
     config.rememberSettings = config.rememberSettings || false;
 
+    // Log all configuration values to console for debugging
+    console.log('=== AI Configuration Debug ===');
+    console.log('provider:', config.provider, '(type:', typeof config.provider, ')');
+    console.log('apiKey:', config.apiKey, '(type:', typeof config.apiKey, ')');
+    console.log('model:', config.model, '(type:', typeof config.model, ')');
+    console.log('temperature:', config.temperature, '(type:', typeof config.temperature, ')');
+    console.log('maxTokens:', config.maxTokens, '(type:', typeof config.maxTokens, ')');
+    console.log('systemPrompt:', config.systemPrompt, '(type:', typeof config.systemPrompt, ')');
+    console.log('rateLimit:', config.rateLimit, '(type:', typeof config.rateLimit, ')');
+    console.log('retryPolicy:', config.retryPolicy, '(type:', typeof config.retryPolicy, ')');
+    console.log('debugLogging:', config.debugLogging, '(type:', typeof config.debugLogging, ')');
+    console.log('rememberSettings:', config.rememberSettings, '(type:', typeof config.rememberSettings, ')');
+    
+    if (config.provider === 'Azure OpenAI') {
+      console.log('endpoint:', config.endpoint, '(type:', typeof config.endpoint, ')');
+      console.log('deploymentName:', config.deploymentName, '(type:', typeof config.deploymentName, ')');
+      console.log('apiVersion:', config.apiVersion, '(type:', typeof config.apiVersion, ')');
+    }
+    
+    if (config.provider === 'Custom' || config.provider === 'OpenRouter') {
+      console.log('baseUrl:', config.baseUrl, '(type:', typeof config.baseUrl, ')');
+    }
+    
+    console.log('Full config object:', JSON.stringify(config, null, 2));
+    console.log('=== End AI Configuration Debug ===');
+
     // Save configuration
     setAIConfig(config);
     
@@ -554,6 +580,9 @@ export class RegisterAICommand implements CommandHandler {
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
       detail: "Use 'registerai status' to view settings." 
+    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: "🔍 Check browser console for detailed configuration debug info." 
     }));
     
     if (config.rememberSettings) {
@@ -592,5 +621,14 @@ export function loadAIConfigFromStorage(): void {
   }
 }
 
+export function isSetupActive(): boolean {
+  return setupState.isActive;
+}
+
 // Initialize from localStorage on module load
 loadAIConfigFromStorage();
+
+
+
+
+

@@ -8,7 +8,7 @@ import "tailwindcss/tailwind.css";
 import "./app.css"; // Add this import for the clickable block styles
 import { useLivingPlayersCount } from "./player";
 import { getHealthStatus, HealthStatus } from './workers/commands/health';
-
+import { isSetupActive as isInRegisterAISetup } from './workers/commands/registerAI';
 
 declare global {
   interface Window {
@@ -198,6 +198,12 @@ export function App() {
       return;
     }
 
+    // Check if we're in registerai setup FIRST - before any other command parsing
+    if (isInRegisterAISetup()) {
+      runCommand(`registerai ${command}`);
+      return;
+    }
+
     // Game commands using workers
     if (command === 'spawn') {
       runCommand('spawn');
@@ -205,11 +211,13 @@ export function App() {
       runCommand('look');
     } else if (command === 'health' || command === 'hp') {
       runCommand('health');
-    } else if (command === 'explore' || command === 'exp') {
-      runCommand('explore');
-    } else if (command.startsWith('explore ') || command.startsWith('exp ')) {
-      const direction = command.startsWith('explore ') ? command.split(' ')[1] : command.split(' ')[1];
-      runCommand(`explore ${direction}`);
+    } else if (command.startsWith('registerai')) {
+      const args = command.split(' ').slice(1);
+      runCommand(`registerai ${args.join(' ')}`);
+    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
+      const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
+      console.log(`Move command: ${direction}, Address: ${address}`);
+      runCommand(`move ${direction}`);
     } else if (command === 'survey') {
       runCommand('survey');
     } else if (command === 'water') {
@@ -218,10 +226,6 @@ export function App() {
       runCommand('done');
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
-    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
-      const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
-      console.log(`Move command: ${direction}, Address: ${address}`);
-      runCommand(`move ${direction}`);
     } else if (command.startsWith('mine ') || command === 'mine') {
       const target = command.startsWith('mine ') ? command.split(' ')[1] : undefined;
       runCommand(`mine${target ? ` ${target}` : ''}`);
@@ -249,12 +253,7 @@ export function App() {
       } else {
         setLog(prev => [...prev, `<span class="speak-prefix">You say,</span> <span class="speak-message">"${message}"</span>`]);
       }
-    } else if (command.startsWith('registerai')) {
-      const args = command.split(' ').slice(1);
-      runCommand(`registerai ${args.join(' ')}`);
-    }
-    // Game commands
-    else if (command === 'players' || command === 'who') {
+    } else if (command === 'players' || command === 'who') {
       setLog(prev => [...prev, `👥 Player data not available without sync`]);
     } else if (command === 'balance' || command === 'bal') {
       const formatted = balanceData

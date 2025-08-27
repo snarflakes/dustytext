@@ -4,6 +4,7 @@
 
 
 
+** Only deposit small amounts of ETH into the smart contract wallet at a time. There is NO reason to deposit large sums. This is an in-production open source engine, the engine builders receive no compensation. You are responsible for retrieving any lost sums.
 
 ### DUST + EntryKit + Quarry + Bundler Architecture Overview
 ** 🔑 Wallets and Session Keys **

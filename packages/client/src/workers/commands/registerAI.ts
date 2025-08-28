@@ -344,7 +344,7 @@ export class RegisterAICommand implements CommandHandler {
         detail: "Step 6/11: Azure OpenAI Configuration" 
       }));
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "Enter endpoint URL: registerai [https://your-resource.openai.azure.com/]" 
+        detail: "Enter endpoint URL: [https://your-resource.openai.azure.com/]" 
       }));
     } else if (provider === 'Custom' || provider === 'OpenRouter') {
       window.dispatchEvent(new CustomEvent("worker-log", { 
@@ -352,7 +352,7 @@ export class RegisterAICommand implements CommandHandler {
       }));
       const example = provider === 'Custom' ? 'http://localhost:1234/v1' : 'https://openrouter.ai/api/v1';
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `Enter base URL (e.g., ${example}): registerai [url]` 
+        detail: `Enter base URL (e.g., ${example}): [url]` 
       }));
     }
   }
@@ -364,13 +364,13 @@ export class RegisterAICommand implements CommandHandler {
       if (!setupState.config.endpoint) {
         setupState.config.endpoint = input;
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "Enter deployment name: registerai [deployment-name]" 
+          detail: "Enter deployment name: [deployment-name]" 
         }));
         return;
       } else if (!setupState.config.deploymentName) {
         setupState.config.deploymentName = input;
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "Enter API version (e.g., 2024-02-15-preview): registerai [version]" 
+          detail: "Enter API version (e.g., 2024-02-15-preview): [version]" 
         }));
         return;
       } else {
@@ -392,7 +392,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "Minimum delay between AI calls in milliseconds (default: 1000)" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter rate limit: registerai [milliseconds]" 
+      detail: "Enter rate limit: [milliseconds]" 
     }));
   }
 
@@ -418,7 +418,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "Number of retries on failure (default: 2)" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter retry count: registerai [number]" 
+      detail: "Enter retry count: [number]" 
     }));
   }
 
@@ -426,7 +426,7 @@ export class RegisterAICommand implements CommandHandler {
     const retries = parseInt(input);
     if (isNaN(retries) || retries < 0 || retries > 5) {
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❌ Retry count must be between 0 and 5: registerai [number]" 
+        detail: "❌ Retry count must be between 0 and 5: [number]" 
       }));
       return;
     }
@@ -444,7 +444,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "Log AI prompts and responses to console for debugging?" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter y/n: registerai [y/n]" 
+      detail: "Enter y/n: [y/n]" 
     }));
   }
 
@@ -452,7 +452,7 @@ export class RegisterAICommand implements CommandHandler {
     const choice = input.toLowerCase();
     if (choice !== 'y' && choice !== 'n' && choice !== 'yes' && choice !== 'no') {
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❌ Enter 'y' for yes or 'n' for no: registerai [y/n]" 
+        detail: "❌ Enter 'y' for yes or 'n' for no: [y/n]" 
       }));
       return;
     }
@@ -470,7 +470,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "Save configuration to browser localStorage?" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter y/n: registerai [y/n]" 
+      detail: "Enter y/n: [y/n]" 
     }));
   }
 
@@ -478,7 +478,7 @@ export class RegisterAICommand implements CommandHandler {
     const choice = input.toLowerCase();
     if (choice !== 'y' && choice !== 'n' && choice !== 'yes' && choice !== 'no') {
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❌ Enter 'y' for yes or 'n' for no: registerai [y/n]" 
+        detail: "❌ Enter 'y' for yes or 'n' for no: [y/n]" 
       }));
       return;
     }
@@ -496,7 +496,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "Use default survival strategy prompt? (recommended)" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter y for default, or n to enter custom: registerai [y/n]" 
+      detail: "Enter y for default, or n to enter custom: [y/n]" 
     }));
   }
 
@@ -508,7 +508,7 @@ export class RegisterAICommand implements CommandHandler {
       this.completeSetup();
     } else if (choice === 'n' || choice === 'no') {
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "Enter your custom system prompt: registerai [your prompt]" 
+        detail: "Enter your custom system prompt: [your prompt]" 
       }));
       setupState.step = 12; // Custom prompt step
     } else if (setupState.step === 12) {
@@ -517,7 +517,7 @@ export class RegisterAICommand implements CommandHandler {
       this.completeSetup();
     } else {
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❌ Enter 'y' for default or 'n' for custom: registerai [y/n]" 
+        detail: "❌ Enter 'y' for default or 'n' for custom: [y/n]" 
       }));
     }
   }

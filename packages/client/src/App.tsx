@@ -1,6 +1,6 @@
 import { AccountButton, useSessionClient } from "@latticexyz/entrykit/internal";
 import { runCommand, setSessionClient } from "./workers";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAccount, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 import { chainId, getWorldAddress } from "./common";
@@ -9,6 +9,8 @@ import "./app.css"; // Add this import for the clickable block styles
 import { useLivingPlayersCount } from "./player";
 import { getHealthStatus, HealthStatus } from './workers/commands/health';
 import { isSetupActive as isInRegisterAISetup } from './workers/commands/registerAI';
+import { getAIConfig } from "./workers/commands/registerAI";
+import { setAIActive } from "./workers/ai/runtime";
 
 declare global {
   interface Window {
@@ -53,6 +55,54 @@ export function App() {
   const { address, isConnected } = useAccount();
   const { data: balanceData } = useBalance({ address, chainId });
   const { data: sessionClient, error: sessionError, isLoading: sessionLoading } = useSessionClient();
+
+  const [aiOn, setAiOn] = useState(false);
+  const aiOnRef = useRef(false);                 // track latest value to avoid stale closures
+  useEffect(() => { aiOnRef.current = aiOn; }, [aiOn]);
+
+  const aiTimerRef = useRef<number | null>(null);
+
+  const tickAI = useCallback(() => {
+    runCommand("ai auto");
+    const delay = getAIConfig()?.rateLimit ?? 1000;
+    aiTimerRef.current = window.setTimeout(() => {
+      if (aiOnRef.current) tickAI();             // only loop if still ON
+    }, delay);
+  }, []);                                        // uses only stable refs/functions
+
+  const startAI = useCallback(() => {
+    if (aiOnRef.current) return;
+    setAiOn(true);
+    setAIActive(true);
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "🤖 AI mode ON" }));
+    tickAI();
+  }, [tickAI]);
+
+  const stopAI = useCallback(() => {
+    setAiOn(false);
+    setAIActive(false);
+    if (aiTimerRef.current != null) {
+      clearTimeout(aiTimerRef.current);
+      aiTimerRef.current = null;
+    }
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "🛑 AI mode OFF" }));
+  }, []);
+
+  // Execute AI-suggested commands (only when AI is ON)
+  useEffect(() => {
+    const onAICommand = (e: Event) => {
+      const ev = e as CustomEvent<{ command: string; source: "AI" }>;
+      if (!ev.detail?.command) return;
+
+      // Optional safety: don’t execute if AI was turned off between emit & handle
+      if (!aiOnRef.current) return;
+
+      runCommand(ev.detail.command); // goes into your normal pipeline
+    };
+
+    window.addEventListener("ai-command", onAICommand as EventListener);
+    return () => window.removeEventListener("ai-command", onAICommand as EventListener);
+  }, []);
 
   // Listen for worker events
   useEffect(() => {
@@ -211,9 +261,16 @@ export function App() {
       runCommand('look');
     } else if (command === 'health' || command === 'hp') {
       runCommand('health');
+    } else if (command === 'explore' || command === 'exp') {
+      runCommand('explore');
+    } else if (command.startsWith('explore ') || command.startsWith('exp ')) {
+      const direction = command.startsWith('explore ') ? command.split(' ')[1] : command.split(' ')[1];
+      runCommand(`explore ${direction}`);
     } else if (command.startsWith('registerai')) {
       const args = command.split(' ').slice(1);
       runCommand(`registerai ${args.join(' ')}`);
+    } else if (command.startsWith('ai ') || command === 'ai') {
+      runCommand(command);
     } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
       const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
       console.log(`Move command: ${direction}, Address: ${address}`);
@@ -355,6 +412,20 @@ export function App() {
                 💰 {parseFloat(formatUnits(balanceData.value, 18)).toFixed(5)} ETH
               </div>
             )}
+            <img 
+              src="/bevel embossdeep.png" 
+              alt={aiOn ? "Stop AI" : "Start AI"}
+              onClick={() => (aiOn ? stopAI() : startAI())}
+              style={{ 
+                height: '56px', 
+                width: 'auto', 
+                cursor: 'pointer',
+                transition: 'opacity 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              title={aiOn ? "🛑 Stop AI" : "🤖 Start AI"}
+            />
             <AccountButton />
           </div>
         </div>

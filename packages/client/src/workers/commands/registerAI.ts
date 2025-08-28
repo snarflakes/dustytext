@@ -1,4 +1,5 @@
 import { CommandHandler, CommandContext } from './types';
+import { setAIRuntimeConfig, getAIClient } from "../ai/runtime";
 
 export interface AIConfig {
   provider: 'OpenAI' | 'Azure OpenAI' | 'OpenRouter' | 'Custom';
@@ -569,6 +570,24 @@ export class RegisterAICommand implements CommandHandler {
     // Save configuration
     setAIConfig(config);
     
+    // 🔌 Prime runtime + test connection (fire-and-forget so completeSetup stays sync)
+    setAIRuntimeConfig(config);
+    void (async () => {
+      try {
+        const r = await getAIClient()!.testConnection();
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: r.ok
+            ? `🔌 LLM connection OK: ${r.message ?? "ready"}`
+            : `⚠️ LLM connection failed: ${r.message ?? "check key/model/endpoint"}`
+        }));
+      } catch (e: unknown) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `⚠️ LLM check error: ${e instanceof Error ? e.message : String(e)}`
+        }));
+      }
+    })();
+
+
     // Reset setup state
     setupState = { step: 0, config: {}, isActive: false };
     
@@ -590,6 +609,7 @@ export class RegisterAICommand implements CommandHandler {
         detail: "💾 Settings saved to browser localStorage." 
       }));
     }
+    
   }
 }
 
@@ -627,6 +647,8 @@ export function isSetupActive(): boolean {
 
 // Initialize from localStorage on module load
 loadAIConfigFromStorage();
+
+
 
 
 

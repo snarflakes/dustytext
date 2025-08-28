@@ -18,6 +18,8 @@ import { TillCommand } from './till.js';
 import { FillCommand } from './fill';
 import { WaterCommand } from './water';
 import { RegisterAICommand } from './registerAI.js';
+import { AICommand } from './ai';
+import { ClickCommand } from './click'; // optional
 
 const commands = new Map<string, CommandHandler>();
 
@@ -41,6 +43,10 @@ commands.set('till', new TillCommand());
 commands.set('fill', new FillCommand());
 commands.set('water', new WaterCommand());
 commands.set('registerai', new RegisterAICommand());
+
+// special AI commands
+commands.set('ai', new AICommand());        // "ai" / "ai auto"
+commands.set('click', new ClickCommand());  // optional
 
 // Debug logging
 console.log('Registry: Available commands:', Array.from(commands.keys()));

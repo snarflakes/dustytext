@@ -1,0 +1,17 @@
+import type { AIConfig } from "../commands/registerAI";
+import type { AIClient } from "./client";
+import { createAIClient } from "./client";
+
+let current: AIConfig | null = null;
+let client: AIClient | null = null;
+let active = false;
+
+export function setAIRuntimeConfig(cfg: AIConfig) {
+  current = cfg;
+  client = createAIClient(cfg);
+}
+export function getAIClient() { return client; }
+export function getAIRuntimeConfig() { return current; }
+
+export function setAIActive(on: boolean) { active = on; }
+export function isAIActive() { return active; }

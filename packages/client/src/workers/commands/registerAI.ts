@@ -9,7 +9,8 @@ export interface AIConfig {
   maxTokens: number;
   systemPrompt: string;
   rememberSettings: boolean;
-  
+  allowedCommands?: string[];
+
   // Azure OpenAI specific
   endpoint?: string;
   deploymentName?: string;
@@ -54,6 +55,30 @@ Key survival priorities:
 Always respond with exactly ONE command that the player should execute next. 
 Available commands include: look, explore, move, mine, craft, build, inventory, health, survey, and others.
 Be concise and strategic in your suggestions.`;
+
+// Put this near DEFAULT_SYSTEM_PROMPT
+const DEFAULT_ALLOWED_COMMANDS = [
+  "look",
+  "explore",
+  "explore north","explore south","explore east","explore west",
+  "explore northeast","explore northwest","explore southeast","explore southwest",
+  "move north","move south","move east","move west",
+  "inventory","health","survey","mine","craft","build","water","done"
+  // add/remove to match your registry
+];
+
+function buildDefaultSystemPrompt(allowed: string[]): string {
+  return `${DEFAULT_SYSTEM_PROMPT}
+
+STRICT OUTPUT RULES:
+- Return exactly ONE command from the allowed set below.
+- Lowercase, no quotes, no punctuation, no code fences, no extra text.
+- If unsure, return "look".
+
+Allowed commands:
+${allowed.map(s => s.trim().toLowerCase()).join(", ")}
+`;
+}
 
 export class RegisterAICommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
@@ -505,7 +530,8 @@ export class RegisterAICommand implements CommandHandler {
     const choice = input.toLowerCase();
     
     if (choice === 'y' || choice === 'yes') {
-      setupState.config.systemPrompt = DEFAULT_SYSTEM_PROMPT;
+      setupState.config.allowedCommands = DEFAULT_ALLOWED_COMMANDS;
+      setupState.config.systemPrompt = buildDefaultSystemPrompt(DEFAULT_ALLOWED_COMMANDS);
       this.completeSetup();
     } else if (choice === 'n' || choice === 'no') {
       window.dispatchEvent(new CustomEvent("worker-log", { 

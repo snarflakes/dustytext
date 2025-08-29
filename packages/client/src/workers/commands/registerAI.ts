@@ -1,6 +1,15 @@
 import { CommandHandler, CommandContext } from './types';
 import { setAIRuntimeConfig, getAIClient } from "../ai/runtime";
 
+function sanitizeApiKey(raw: string): string {
+  // strip surrounding quotes/spaces and zero-width junk
+  return raw
+    .replace(/[\u200B-\u200D\uFEFF]/g, "")      // zero-width spaces
+    .replace(/^[\s'"]+|[\s'"]+$/g, "")          // leading/trailing spaces/quotes
+    .trim();
+}
+
+
 export interface AIConfig {
   provider: 'OpenAI' | 'Azure OpenAI' | 'OpenRouter' | 'Custom';
   apiKey: string;
@@ -10,6 +19,7 @@ export interface AIConfig {
   systemPrompt: string;
   rememberSettings: boolean;
   allowedCommands?: string[];
+
 
   // Azure OpenAI specific
   endpoint?: string;
@@ -42,41 +52,66 @@ let setupState: SetupState = {
   isActive: false
 };
 
-const DEFAULT_SYSTEM_PROMPT = `You are an AI assistant helping a player in a text-based survival game called Dusty Text. 
-Your role is to analyze the game state and suggest single commands to help the player survive and thrive.
+const DEFAULT_SYSTEM_PROMPT = `You are an AI living in a text-based game called Dusty Text. 
+Your role is to analyze the game state and suggest single commands to enjoy yourself. You will die in 3 days without food. But you can respawn but will be forced to lose all collected items and be transported to a completely new area on map, with possibly less resources.
 
-Key survival priorities:
+Key game system:
 1. Find water and food sources
-2. Gather basic materials (wood, stone)
-3. Craft essential tools
-4. Build shelter
-5. Explore safely
+2. Gather basic materials (seeds, wood)
+3. Craft essential tools that allow you to mine with better efficiency.
+4. Explore safely and realize moving depletes energy and mining depletes energy and falling more than 3 blocks depletes energy.
+5. Share your thoughts of the experience, only as you deem necessary.
 
 Always respond with exactly ONE command that the player should execute next. 
 Available commands include: look, explore, move, mine, craft, build, inventory, health, survey, and others.
-Be concise and strategic in your suggestions.`;
+Be concise and strategic in your suggestions and communications.`;
 
 // Put this near DEFAULT_SYSTEM_PROMPT
-const DEFAULT_ALLOWED_COMMANDS = [
-  "look",
+export const DEFAULT_ALLOWED_COMMANDS = [
+  // no-arg
+  "look","help","inventory","health","survey","build","water","till","fill","done","unequip","spawn",
+
+  // mine variants
+  "mine","mine up",
+
+  // explore
   "explore",
   "explore north","explore south","explore east","explore west",
   "explore northeast","explore northwest","explore southeast","explore southwest",
+
+  // move (incl. diagonals)
   "move north","move south","move east","move west",
-  "inventory","health","survey","mine","craft","build","water","done"
-  // add/remove to match your registry
+  "move northeast","move northwest","move southeast","move southwest",
+
+  // specific craftables
+  "craft spruceplanks","craft oakplanks","craft birchplanks",
+  "craft jungleplanks","craft sakuraplanks","craft acaciaplanks",
+
+  // prefix rules (trailing space = requires one arg)
+  "craft ",   // craft <item>
+  "equip ",   // equip <tool>
+  
+  // speaking: any line that starts with a single apostrophe is allowed
+  "'"
 ];
 
 function buildDefaultSystemPrompt(allowed: string[]): string {
+  const shown = allowed.map(c => {
+    if (c === "'") return "'<message>' (example: 'I am here.)";
+    if (c.endsWith(" ")) return `${c}<value>`;
+    return c;
+  });
+
   return `${DEFAULT_SYSTEM_PROMPT}
 
 STRICT OUTPUT RULES:
 - Return exactly ONE command from the allowed set below.
-- Lowercase, no quotes, no punctuation, no code fences, no extra text.
+- Lowercase for command words; speaking may include punctuation/capitalization after the leading apostrophe.
+- No surrounding quotes or extra text.
 - If unsure, return "look".
 
 Allowed commands:
-${allowed.map(s => s.trim().toLowerCase()).join(", ")}
+${shown.join(", ")}
 `;
 }
 
@@ -258,17 +293,28 @@ export class RegisterAICommand implements CommandHandler {
   }
 
   private handleApiKey(input: string): void {
-    if (input.length < 10) {
+    const key = sanitizeApiKey(input);
+
+    if (key.length < 20) {
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: "❌ API key seems too short. Please enter a valid API key: registerai [your-api-key]" 
       }));
       return;
     }
-    
-    setupState.config.apiKey = input;
+
+    // Optional: gentle format hint (don’t hard fail)
+    const looksOk =
+      /^sk-[A-Za-z0-9_-]+$/.test(key) || /^sk-proj-[A-Za-z0-9_-]+$/.test(key);
+    if (!looksOk) {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "⚠️ Key format looks unusual. If this fails, paste again without quotes/spaces." 
+      }));
+    }
+
+    setupState.config.apiKey = key;
     setupState.step = 3;
     this.showStep3();
-  }
+ }
 
   private showStep3(): void {
     window.dispatchEvent(new CustomEvent("worker-log", { 
@@ -645,6 +691,7 @@ export function getAIConfig(): AIConfig | null {
 }
 
 export function setAIConfig(config: AIConfig): void {
+  config.apiKey = sanitizeApiKey(config.apiKey);
   aiConfig = config;
   
   if (config.rememberSettings) {
@@ -660,8 +707,10 @@ export function loadAIConfigFromStorage(): void {
   try {
     const stored = localStorage.getItem('dustytext-ai-config');
     if (stored) {
-      aiConfig = JSON.parse(stored);
-    }
+      const cfg = JSON.parse(stored) as AIConfig;
+      if (cfg?.apiKey) cfg.apiKey = sanitizeApiKey(cfg.apiKey);
+      aiConfig = cfg;
+    }  
   } catch (error) {
     console.warn('Failed to load AI config from localStorage:', error);
   }

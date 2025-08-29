@@ -11,6 +11,7 @@ import { getHealthStatus, HealthStatus } from './workers/commands/health';
 import { isSetupActive as isInRegisterAISetup } from './workers/commands/registerAI';
 import { getAIConfig } from "./workers/commands/registerAI";
 import { setAIActive } from "./workers/ai/runtime";
+import { appendAILog } from "./workers/ai/runtime";
 
 declare global {
   interface Window {
@@ -63,6 +64,9 @@ export function App() {
   const aiTimerRef = useRef<number | null>(null);
 
   const tickAI = useCallback(() => {
+    // bail out if AI was turned off after this timer was scheduled
+    //if (!aiOnRef.current) return;
+
     runCommand("ai auto");
     const delay = getAIConfig()?.rateLimit ?? 1000;
     aiTimerRef.current = window.setTimeout(() => {
@@ -88,6 +92,21 @@ export function App() {
     window.dispatchEvent(new CustomEvent("worker-log", { detail: "🛑 AI mode OFF" }));
   }, []);
 
+  // ✅ ONE worker-log effect (UI + AI buffer)
+  useEffect(() => {
+    const stripHtml = (s: string) => s.replace(/<[^>]*>/g, "");
+    const onWorkerLog = (e: Event) => {
+      const ce = e as CustomEvent<string>;
+      const line = String(ce.detail ?? "");
+      setLog(prev => [...prev, line]);      // update terminal
+      appendAILog(stripHtml(line));         // feed AI buffer
+    };
+
+    window.addEventListener("worker-log", onWorkerLog as EventListener);
+    return () => window.removeEventListener("worker-log", onWorkerLog as EventListener);
+  }, []);
+
+
   // Execute AI-suggested commands (only when AI is ON)
   useEffect(() => {
     const onAICommand = (e: Event) => {
@@ -102,16 +121,6 @@ export function App() {
 
     window.addEventListener("ai-command", onAICommand as EventListener);
     return () => window.removeEventListener("ai-command", onAICommand as EventListener);
-  }, []);
-
-  // Listen for worker events
-  useEffect(() => {
-    const handleWorkerLog = (event: CustomEvent) => {
-      setLog(prev => [...prev, event.detail]);
-    };
-
-    window.addEventListener("worker-log", handleWorkerLog as EventListener);
-    return () => window.removeEventListener("worker-log", handleWorkerLog as EventListener);
   }, []);
 
   // Enhanced EntryKit debugging and session client sharing

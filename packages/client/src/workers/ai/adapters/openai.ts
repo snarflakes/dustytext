@@ -1,26 +1,91 @@
+// workers/ai/adapters/openai.ts
 import type { AIClient } from "../client";
 import type { AIConfig } from "../../commands/registerAI";
-
-/** Normalize an LLM reply to a single-line command without quoting/fences. */
-function normalizeCommand(s: string): string {
-  return (s ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/^["'`]+|["'`]+$/g, "") // strip wrapping quotes/fences
-    .split(/\r?\n/)[0]               // first line only
-    .replace(/\s+/g, " ")            // collapse spaces
-    .trim();
-}
 
 /** Safe error → message conversion (no `any`). */
 function toErrorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
-  try {
-    return JSON.stringify(e);
-  } catch {
-    /* ignore */
-  }
+  try { return JSON.stringify(e); } catch { /* ignore */ }
   return String(e);
+}
+
+/**
+ * Normalize an LLM reply to a single-line command for EXECUTION.
+ * - If it starts with an apostrophe (speaking), return the raw first line (preserve casing/punctuation).
+ * - Otherwise: trim, lowercase, collapse spaces, strip wrapping quotes, first line only.
+ */
+function normalizeForExec(s: string): string {
+  const rawLine = (s ?? "").trim().split(/\r?\n/)[0] ?? "";
+  if (rawLine.startsWith("'")) {
+    // speaking: keep as-is so the player text isn't mangled
+    return rawLine;
+  }
+  // Non-speak: normalize
+  return rawLine
+    .replace(/^["'`]+|["'`]+$/g, "") // strip wrapping quotes/fences
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Normalize for MATCHING against allowed rules.
+ * - For speak: we only check that it begins with "'" and has content (length > 1).
+ * - For others: lowercase & trim like exec normalization (but we never alter speak content).
+ */
+function normalizeForMatch(s: string): { isSpeak: boolean; line: string } {
+  const rawLine = (s ?? "").trim().split(/\r?\n/)[0] ?? "";
+  if (rawLine.startsWith("'")) {
+    return { isSpeak: true, line: rawLine }; // use raw line for speak checks
+  }
+  const norm = rawLine
+    .replace(/^["'`]+|["'`]+$/g, "")
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .trim();
+  return { isSpeak: false, line: norm };
+}
+
+/** Build fast match structures from allowedCommands. */
+function compileAllowed(allowedRaw: string[]) {
+  let allowSpeak = false;
+  const exact = new Set<string>();
+  const prefixes: string[] = [];
+
+  for (const entry of allowedRaw) {
+    const e = entry.trim();
+    if (!e) continue;
+    if (e === "'") {
+      allowSpeak = true;
+      continue;
+    }
+    if (e.endsWith(" ")) {
+      prefixes.push(e.toLowerCase());
+    } else {
+      exact.add(e.toLowerCase());
+    }
+  }
+  return { allowSpeak, exact, prefixes };
+}
+
+/** Check if a normalized command is allowed by {exact, prefixes, allowSpeak}. */
+function isAllowedCommand(cmdRaw: string, compiled: ReturnType<typeof compileAllowed>): boolean {
+  const { isSpeak, line } = normalizeForMatch(cmdRaw);
+
+  if (isSpeak) {
+    // speaking: must start with "'" and have at least one char after it
+    return compiled.allowSpeak && line.length > 1;
+  }
+
+  // exact match?
+  if (compiled.exact.has(line)) return true;
+
+  // prefix rules (e.g., "craft ", "equip ", "mine ")
+  for (const p of compiled.prefixes) {
+    if (line.startsWith(p) && line.length > p.length) return true;
+  }
+
+  return false;
 }
 
 export const clientOpenAI = (cfg: AIConfig): AIClient => {
@@ -30,7 +95,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
   }
 
   const baseUrl = cfg.baseUrl ?? "https://api.openai.com/v1";
-  const allowed = (cfg.allowedCommands ?? []).map((s) => s.trim().toLowerCase());
+  const compiledAllowed = compileAllowed(cfg.allowedCommands ?? []);
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${cfg.apiKey}`, // dev-only!
@@ -80,18 +145,19 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
             { role: "system", content: cfg.systemPrompt },
             {
               role: "user",
-              content: `GameState:\n${JSON.stringify(
-                state
-              )}\n\nReturn exactly ONE command (lowercase, no punctuation):`,
+              content:
+                `GameState:\n${JSON.stringify(state)}\n\n` +
+                `Return exactly ONE command (lowercase for command words; ` +
+                `speaking is a leading apostrophe followed by your message).`,
             },
           ],
           // stop: ["\n"], // optional: cut on newline
         });
 
-        const cmd = normalizeCommand(text);
+        const execCmd = normalizeForExec(text);
 
-        // Option A: do NOT coerce; only allow exact matches from the whitelist
-        if (allowed.length && !allowed.includes(cmd)) {
+        // Option A: do NOT coerce; only allow exact/prefix/speak from the whitelist
+        if (!isAllowedCommand(execCmd, compiledAllowed)) {
           window.dispatchEvent(
             new CustomEvent("worker-log", {
               detail: `⚠️ AI produced disallowed command: "${text}". (ignored)`,
@@ -100,7 +166,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
           return ""; // signal "no-op" to the runtime
         }
 
-        return cmd;
+        return execCmd;
       } catch (e: unknown) {
         window.dispatchEvent(
           new CustomEvent("worker-log", { detail: `❌ AI error: ${toErrorMessage(e)}` })

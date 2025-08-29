@@ -1,70 +1,42 @@
-import type { CommandHandler, CommandContext } from "./types";
-import { getAIClient, setAIRuntimeConfig, isAIActive } from "../ai/runtime";
+// workers/commands/ai.ts
+import { CommandHandler, CommandContext } from "./types";
 import { getAIConfig } from "./registerAI";
-
-// Nicely stringify errors without using `any`.
-function getErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  try { return JSON.stringify(err); } catch { return String(err); }
-}
-
-type GameState = {
-  address: string;
-  sessionAccount: string;
-};
-
-async function getCurrentGameState(ctx: CommandContext): Promise<GameState> {
-  const sessionAccount =
-    typeof ctx.sessionClient.account === "string"
-      ? ctx.sessionClient.account
-      : ctx.sessionClient.account.address;
-
-  return {
-    address: ctx.address,
-    sessionAccount,
-  };
-}
+import { setAIRuntimeConfig, getAIClient, isAIActive, getLogSnapshot } from "../ai/runtime";
 
 export class AICommand implements CommandHandler {
-  async execute(ctx: CommandContext, ...args: string[]): Promise<void> {
+  async execute(ctx: CommandContext, ...args: string[]) {
     const cfg = getAIConfig();
     if (!cfg) {
-      window.dispatchEvent(new CustomEvent("worker-log", {
-        detail: "🤖 Configure AI first: 'registerai'."
-      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: "🤖 Configure AI first: 'registerai'." }));
       return;
     }
-
-    const auto = args[0] === "auto";
-    if (auto && !isAIActive()) {
+    if (!isAIActive()) {
       window.dispatchEvent(new CustomEvent("worker-log", { detail: "🛑 AI is inactive." }));
       return;
     }
 
     setAIRuntimeConfig(cfg);
+
+    const snapshot = {
+      address: ctx.address,
+      recentLog: getLogSnapshot(20), // last 20 terminal lines (plain text)
+    };
+
     window.dispatchEvent(new CustomEvent("worker-log", { detail: "🤖 Thinking..." }));
 
-    try {
-      const client = getAIClient();
-      if (!client) throw new Error("AI client not initialized");
+    const client = getAIClient();
+    if (!client) {
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: "❌ AI client not ready." }));
+      return;
+    }
 
-      const state = await getCurrentGameState(ctx);
-      const cmd = await client.getNextCommand(state);
+    const cmd = await client.getNextCommand(snapshot);
+    if (!cmd) return;
 
-      window.dispatchEvent(new CustomEvent("worker-log", {
-        detail: `🤖 Suggestion: <b>${cmd}</b>`
-      }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: `🤖 Suggestion: <b>${cmd}</b>` }));
 
-      if (auto && isAIActive() && cmd) {
-        // DO NOT import runCommand here; let App.tsx execute it centrally.
-        window.dispatchEvent(new CustomEvent("ai-command", {
-          detail: { command: cmd, source: "AI" as const }
-        }));
-      }
-    } catch (err: unknown) {
-      window.dispatchEvent(new CustomEvent("worker-log", {
-        detail: `❌ AI error: ${getErrorMessage(err)}`
-      }));
+    if (args[0] === "auto") {
+      window.dispatchEvent(new CustomEvent("ai-command", { detail: { command: cmd, source: "AI" as const } }));
     }
   }
 }

@@ -15,3 +15,20 @@ export function getAIRuntimeConfig() { return current; }
 
 export function setAIActive(on: boolean) { active = on; }
 export function isAIActive() { return active; }
+
+// Rolling buffer of recent terminal lines (plain text)
+const recentLog: string[] = [];
+
+export function appendAILog(line: string) {
+  recentLog.push(line);
+  if (recentLog.length > 200) recentLog.shift();
+}
+
+export function getLogSnapshot(n = 20) {
+  return recentLog.slice(-n);
+}
+
+// Optional: clear the buffer without reassigning
+export function resetAILog() {
+  recentLog.length = 0;
+}

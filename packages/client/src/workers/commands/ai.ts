@@ -42,7 +42,7 @@ export class AICommand implements CommandHandler {
 
       const snapshot = {
         address: ctx.address,
-        recentLog: getLogSnapshot(20), // last 20 terminal lines (plain text)
+        recentLog: getLogSnapshot(45), // last 20 terminal lines (plain text)
         recentCommands: getRecentCommands(8),
       };
 

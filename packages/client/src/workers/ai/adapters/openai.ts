@@ -201,7 +201,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
           {
             address: snap.address,
             recentCommands: recentCmds.slice(-8),
-            recentLog: cleanLog.slice(-10), // last few useful lines
+            recentLog: cleanLog.slice(-40), // last few useful lines
           },
           null,
           2

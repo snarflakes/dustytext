@@ -379,7 +379,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "Step 5/11: Max Tokens per Response" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "32-64 recommended for single commands (default: 50)" 
+      detail: "32-64 recommended for single commands (default: 50) for o4 models 1500 needed" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
       detail: "Enter max tokens:" 
@@ -388,9 +388,9 @@ export class RegisterAICommand implements CommandHandler {
 
   private handleMaxTokens(input: string): void {
     const tokens = parseInt(input);
-    if (isNaN(tokens) || tokens < 1 || tokens > 1500) {
+    if (isNaN(tokens) || tokens < 32 || tokens > 1500) {
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❌ Max tokens must be between 1 and 1000: registerai [number]" 
+        detail: "❌ Max tokens must be between 32 and 1500: registerai [number]" 
       }));
       return;
     }
@@ -460,7 +460,7 @@ export class RegisterAICommand implements CommandHandler {
       detail: "Step 7/11: Rate Limiting" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Minimum delay between AI calls in milliseconds (default: 1000)" 
+      detail: "Minimum delay between AI calls in milliseconds (default: 1000) for o4 models 10000 recommended" 
     }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
       detail: "Enter rate limit: [milliseconds]" 
@@ -469,9 +469,9 @@ export class RegisterAICommand implements CommandHandler {
 
   private handleRateLimit(input: string): void {
     const limit = parseInt(input);
-    if (isNaN(limit) || limit < 100 || limit > 10000) {
+    if (isNaN(limit) || limit < 1000 || limit > 15000) {
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❌ Rate limit must be between 100 and 10000ms: registerai [number]" 
+        detail: "❌ Rate limit must be between 1000 and 15000ms: registerai [number]" 
       }));
       return;
     }

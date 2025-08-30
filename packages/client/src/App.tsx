@@ -244,7 +244,28 @@ export function App() {
 
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
-    const command = input.trim().toLowerCase();
+    const raw = input.trim();
+    const command = raw.toLowerCase(); // routing only
+
+    // If we're mid registerai wizard, forward RAW (preserve casing)
+    if (isInRegisterAISetup()) {
+      setLog(prev => [...prev, `> [input received]`]);  // mask: don’t show secrets
+      runCommand(`registerai ${raw}`);
+      setInput('');
+      return;
+    }
+
+    // Not in wizard: show exactly what user typed
+    //setLog(prev => [...prev, `> ${raw}`]);
+
+    // Starting/continuing registerai on a single line
+    if (command.startsWith('registerai')) {
+      const args = raw.slice('registerai'.length).trim(); // peel from RAW
+      runCommand(`registerai ${args}`);
+      setInput('');
+      return;
+    }
+
     if (!command) return;
     
     setLog(prev => [...prev, `> ${command}`]);

@@ -1,6 +1,7 @@
 // src/commands/index.ts
 import { commandQueue } from '../commandQueue';
 import { getCommand } from './commands/registry';
+import { recordExecutedCommand } from "./ai/runtime";
 
 interface SessionClient {
   account: { address: `0x${string}` };
@@ -113,20 +114,22 @@ async function runWorkerCommand(command: string): Promise<void> {
   // Get and execute command
   const handler = getCommand(commandName);
   console.log(`Looking for command: ${commandName}, found: ${!!handler}`);
-  if (handler) {
-    await handler.execute(context, ...args);
-  } else {
+  if (!handler) {
     window.dispatchEvent(new CustomEvent("worker-log", { 
       detail: `❓ Unknown command: ${command}` 
+   }));
+   return;
+  }
+
+  try {
+    await handler.execute(context, ...args);
+    // Record only successful, non-control commands
+    if (!commandName.startsWith("ai")) {
+      recordExecutedCommand(command);
+    }
+  } catch (err) {
+    window.dispatchEvent(new CustomEvent("worker-log", { 
+      detail: `⚠️ Command error: ${err instanceof Error ? err.message : String(err)}`
     }));
   }
 }
-
-// Remove these unused functions - they're replaced by the command registry system
-// const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
-// const MOVE_ABI = [...]
-// function directionToEnum(direction: string): number {...}
-// async function handleMoveCommand(...) {...}
-// async function handleSpawnCommand(...) {...}
-// async function handleLookCommand(...) {...}
-// async function handleHealthCommand(...) {...}

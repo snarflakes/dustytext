@@ -3,6 +3,40 @@ import type { AIClient } from "../client";
 import type { AIConfig } from "../../commands/registerAI";
 
 // ---------- helpers ----------
+type Role = "system" | "user" | "assistant";
+type Message = { role: Role; content: string };
+
+type ResponsesBody = {
+  model: string;
+  input: Message[];
+  max_output_tokens?: number;
+  temperature?: number;
+  reasoning?: { effort?: "low" | "medium" | "high" };
+};
+
+function supportsTemperature(model: string): boolean {
+  const m = model.toLowerCase();
+  // Reasoning-family models (o1/o3/o4…) don’t accept temperature
+  return !(m.startsWith("o1") || m.startsWith("o3") || m.startsWith("o4"));
+}
+
+function makeResponsesBody(
+  model: string,
+  input: Message[],
+  maxTokens: number,
+  temperature?: number
+): ResponsesBody {
+  const body: ResponsesBody = {
+    model,
+    input,
+    max_output_tokens: Math.max(16, maxTokens),
+  };
+  if (supportsTemperature(model) && typeof temperature === "number") {
+    body.temperature = temperature;
+  }
+  return body;
+}
+
 type AllowedSpec = { exact: Set<string>; prefixes: string[]; allowSpeak: boolean };
 
 function compileAllowed(list: string[] | undefined): AllowedSpec {
@@ -164,33 +198,35 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
   return {
     async testConnection() {
       try {
-        await call({
-          model: cfg.model,
-          input: [{ role: "user", content: "ping" }],
-          temperature: 0,
-          max_output_tokens: 32, // must be >= 16
-        });
+        const body = makeResponsesBody(
+          cfg.model,
+          [{ role: "user", content: "ping" }],
+          32,            // just enough for “pong”
+          0              // ignored for o*-models, included for others
+        );
+        await call(body);
         return { ok: true, message: "connected" };
       } catch (e: unknown) {
         return { ok: false, message: toErrorMessage(e) };
       }
     },
-
+    
+    
     async getNextCommand(state: unknown) {
       try {
         // Parse snapshot safely
         const snap = asSnapshot(state);
 
-        // Filter out AI/system chatter so the model sees only game-relevant info
-        const cleanLog = (snap.recentLog ?? []).filter((line) =>
-          !/^(You start to ai auto|🤖|🛑|🔌|⚠️|✅|💾)/.test(line)
+        // Hide AI/system chatter from the model
+        const cleanLog = (snap.recentLog ?? []).filter(
+          (line) => !/^(You start to ai auto|🤖|🛑|🔌|⚠️|✅|💾)/.test(line)
         );
 
-        // Look at what we did recently
+        // Recent commands (lowercased)
         const recentCmds = (snap.recentCommands ?? []).map((s) => String(s).toLowerCase());
         const lastCmd = recentCmds[recentCmds.length - 1] ?? "";
 
-        // Pick a direction we haven’t used in the last couple explores
+        // Pick the next direction not used in the last couple of explores
         const dirCycle = ["north","east","south","west","northeast","northwest","southeast","southwest"];
         const lastExplores = recentCmds.filter((c) => c.startsWith("explore ")).slice(-2);
         const recentlyTried = lastExplores.map((c) => c.replace(/^explore\s+/, ""));
@@ -201,7 +237,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
           {
             address: snap.address,
             recentCommands: recentCmds.slice(-8),
-            recentLog: cleanLog.slice(-40), // last few useful lines
+            recentLog: cleanLog.slice(-40),
           },
           null,
           2
@@ -210,35 +246,63 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
         // Gentle preference hints (no hard bans on repeats)
         const preferences =
           `Preferences:\n` +
-          `- Previous command: ${lastCmd || "none"}.\n` +   // <- just context, not a rule
-          `- After a successful "look", prefer "explore ${nextDir}".\n` +
-          `- It’s OK to repeat if truly best; vary explore directions when possible.\n`;
-        
-        const prompt = [
+          `- Previous command: ${lastCmd || "none"}.\n` +
+          `- It’s OK to repeat if truly best.\n`;
+
+        // Output contract (allows speaking via leading apostrophe)
+        const outputContract =
+          `OUTPUT CONTRACT\n` +
+          `- Return exactly ONE line.\n` +
+          `- It may be EITHER:\n` +
+          `  • an allowed command (lowercase keywords), OR\n` +
+          `  • a speaking line that begins with a single apostrophe (').\n` +
+          `- No extra text or explanations.\n`;
+
+        // Type the prompt so TS knows role is the literal union
+        const prompt: ReadonlyArray<{ role: "system" | "user"; content: string }> = [
           { role: "system", content: cfg.systemPrompt },
           {
             role: "user",
             content:
               `GameState (most recent first):\n${stateBlob}\n\n` +
               `${preferences}\n` +
-              `Return exactly ONE command from the allowed set. ` +
-              `If unsure, choose "explore ${nextDir}".`
+              `${outputContract}\n` +
+              // Softer fallback: you *want* occasional speech
+              `If uncertain, speak briefly about your intent.\n` 
+              // Give it a nudge to explore variety
+              //`If the last visible result was a 'look', consider "explore ${nextDir}".`,
           },
         ];
 
         if (cfg.debugLogging) console.log("[AI/OpenAI] Prompt", prompt);
 
-        const raw = await call({
+        // Build body with proper constraints:
+        const body: {
+          model: string;
+          input: typeof prompt;
+          max_output_tokens: number;
+          temperature?: number;
+        } = {
           model: cfg.model,
-          temperature: cfg.temperature,
-          max_output_tokens: Math.max(16, cfg.maxTokens ?? 32),
           input: prompt,
-        });
+          max_output_tokens: Math.max(16, cfg.maxTokens ?? 32),
+        };
+
+        // Some o* models reject temperature entirely (e.g., o4-mini). Guard it.
+        const lower = (cfg.model || "").toLowerCase();
+        const isOFamily = lower.startsWith("o"); // o1, o3, o4-mini, etc.
+        if (!isOFamily && typeof cfg.temperature === "number") {
+          body.temperature = cfg.temperature;
+        }
+
+        const raw = await call(body);
 
         const normalized = normalizeForExec(raw);
         const allowed = isAllowedCommand(normalized, compiledAllowed);
 
-        if (cfg.debugLogging) console.log("[AI/OpenAI] Normalized", normalized, { allowed });
+        if (cfg.debugLogging) {
+          console.log("[AI/OpenAI] Normalized", normalized, { allowed });
+        }
 
         if (!allowed) {
           window.dispatchEvent(
@@ -256,12 +320,6 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
         );
         return "";
       }
-
-
-    
-    
-    
-    
-    },
+    }
   };
 };

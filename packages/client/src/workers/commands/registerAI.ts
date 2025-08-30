@@ -60,7 +60,7 @@ Key game system:
 2. Gather basic materials (seeds, wood)
 3. Craft essential tools that allow you to mine with better efficiency.
 4. Explore safely and realize moving depletes energy and mining depletes energy and falling more than 3 blocks depletes energy.
-5. Share your thoughts of the experience.
+5. Share your thoughts of the experience. By using a single apostrophe followed by your words instead of a command.
 
 Always respond with exactly ONE command that the player should execute next. 
 Available commands include: look, explore, move, mine, craft, build, inventory, health, survey, and others.
@@ -321,7 +321,7 @@ export class RegisterAICommand implements CommandHandler {
     }));
     
     const suggestions = {
-      'OpenAI': 'gpt-4o-mini, gpt-4o, gpt-3.5-turbo',
+      'OpenAI': 'gpt-4o-mini, o4-mini, gpt-4o, gpt-3.5-turbo',
       'Azure OpenAI': 'gpt-4, gpt-35-turbo (deployment name)',
       'OpenRouter': 'openai/gpt-4o-mini, anthropic/claude-3-sonnet',
       'Custom': 'depends on your local setup'
@@ -388,7 +388,7 @@ export class RegisterAICommand implements CommandHandler {
 
   private handleMaxTokens(input: string): void {
     const tokens = parseInt(input);
-    if (isNaN(tokens) || tokens < 1 || tokens > 1000) {
+    if (isNaN(tokens) || tokens < 1 || tokens > 1500) {
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: "❌ Max tokens must be between 1 and 1000: registerai [number]" 
       }));

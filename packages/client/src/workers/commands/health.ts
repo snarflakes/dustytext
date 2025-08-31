@@ -35,6 +35,7 @@ export interface HealthStatus {
 
 export async function getHealthStatus(address: string): Promise<HealthStatus> {
   try {
+    console.log('getHealthStatus called for:', address);
     const entityId = encodePlayerEntityId(address);
     
     // Just check energy directly from the database
@@ -69,12 +70,15 @@ export async function getHealthStatus(address: string): Promise<HealthStatus> {
         const percentage = Number((optimisticEnergy * 100n) / SPAWN_ENERGY);
         const isAlive = optimisticEnergy > 0n;
 
+        console.log('Health calculated:', { percentage, isAlive, energy: optimisticEnergy.toString() });
         return { isAlive, lifePercentage: percentage, energy: optimisticEnergy };
       }
     }
 
+    console.log('No health data found');
     return { isAlive: false, lifePercentage: 0, energy: 0n };
   } catch (error) {
+    console.error('getHealthStatus error:', error);
     return { isAlive: false, lifePercentage: 0, energy: 0n };
   }
 }
@@ -200,6 +204,7 @@ export class HealthCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

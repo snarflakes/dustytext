@@ -23,6 +23,7 @@ export class HelpCommand implements CommandHandler {
       '       Equip (use a tool from your inventory. Try using axe for wood, and a pick for seed harvesting),',
       '       Unequip (stop using your current tool, they break with use!),',
       '       Mining in Explore mode, Click each block you want to mine, then type Done to harvest all),',
+      '       RegisterAI (configure AI assistant settings for future AI mode),',
       '  Movement: north/n, south/s, east/e, west/w,',
       '  System: help/h, clear, balance/bal, players/who,',
       '  Debug: debug/d'
@@ -35,6 +36,7 @@ export class HelpCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

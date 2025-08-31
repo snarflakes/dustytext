@@ -97,9 +97,10 @@ export class TillCommand implements CommandHandler {
     } catch (error) {
       const errorMessage = String(error);
       
-      if (errorMessage.includes('Not tillable')) {
+      if (errorMessage.includes('Not tillable') || 
+          errorMessage.includes('4e6f742074696c6c61626c650000000000000000000000000000000000000000')) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "❌ This ground cannot be tilled. Try standing on dirt or grass." 
+          detail: "❌ This land has already been tilled or cannot be tilled. Try standing on dirt or grass that hasn't been tilled yet." 
         }));
       } else if (errorMessage.includes('Must equip a hoe')) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
@@ -113,4 +114,5 @@ export class TillCommand implements CommandHandler {
     }
   }
 }
+
 

@@ -1,6 +1,6 @@
 import { AccountButton, useSessionClient } from "@latticexyz/entrykit/internal";
 import { runCommand, setSessionClient } from "./workers";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useAccount, useBalance } from "wagmi";
 import { formatUnits } from "viem";
 import { chainId, getWorldAddress } from "./common";
@@ -8,7 +8,10 @@ import "tailwindcss/tailwind.css";
 import "./app.css"; // Add this import for the clickable block styles
 import { useLivingPlayersCount } from "./player";
 import { getHealthStatus, HealthStatus } from './workers/commands/health';
-
+import { isSetupActive as isInRegisterAISetup } from './workers/commands/registerAI';
+import { getAIConfig } from "./workers/commands/registerAI";
+import { setAIActive } from "./workers/ai/runtime";
+import { appendAILog } from "./workers/ai/runtime";
 
 declare global {
   interface Window {
@@ -54,14 +57,80 @@ export function App() {
   const { data: balanceData } = useBalance({ address, chainId });
   const { data: sessionClient, error: sessionError, isLoading: sessionLoading } = useSessionClient();
 
-  // Listen for worker events
+  const [aiOn, setAiOn] = useState(false);
+  const aiOnRef = useRef(false);                 // track latest value to avoid stale closures
+  useEffect(() => { aiOnRef.current = aiOn; }, [aiOn]);
+
+  const aiTimerRef = useRef<number | null>(null);
+
+  const tickAI = useCallback(() => {
+    // bail out if AI was turned off after this timer was scheduled
+    //if (!aiOnRef.current) return;
+
+    runCommand("ai auto");
+    const delay = getAIConfig()?.rateLimit ?? 1000;
+    aiTimerRef.current = window.setTimeout(() => {
+      if (aiOnRef.current) tickAI();             // only loop if still ON
+    }, delay);
+  }, []);                                        // uses only stable refs/functions
+
+  const startAI = useCallback(() => {
+    if (aiOnRef.current) return;
+    setAiOn(true);
+    setAIActive(true);
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "🤖 AI mode ON" }));
+    tickAI();
+  }, [tickAI]);
+
+  const stopAI = useCallback(() => {
+    setAiOn(false);
+    setAIActive(false);
+    if (aiTimerRef.current != null) {
+      clearTimeout(aiTimerRef.current);
+      aiTimerRef.current = null;
+    }
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "🛑 AI mode OFF" }));
+  }, []);
+
+  // ✅ ONE worker-log effect (UI + AI buffer)
   useEffect(() => {
-    const handleWorkerLog = (event: CustomEvent) => {
-      setLog(prev => [...prev, event.detail]);
+    const stripHtml = (s: string) => s.replace(/<[^>]*>/g, "");
+    const onWorkerLog = (e: Event) => {
+      const ce = e as CustomEvent<string>;
+      const line = String(ce.detail ?? "");
+      setLog(prev => [...prev, line]);      // update terminal
+      appendAILog(stripHtml(line));         // feed AI buffer
     };
 
-    window.addEventListener("worker-log", handleWorkerLog as EventListener);
-    return () => window.removeEventListener("worker-log", handleWorkerLog as EventListener);
+    window.addEventListener("worker-log", onWorkerLog as EventListener);
+    return () => window.removeEventListener("worker-log", onWorkerLog as EventListener);
+  }, []);
+
+// Execute AI-suggested commands (only when AI is ON)
+  useEffect(() => {
+    const onAICommand = (e: Event) => {
+      const ev = e as CustomEvent<{ command: string; source: "AI" }>;
+      const cmd = String(ev.detail?.command ?? "").trim();
+      if (!cmd) return;
+
+      // Optional safety: don’t execute if AI was turned off between emit & handle
+      if (!aiOnRef.current) return;
+
+      // If the AI produced a speaking line (starts with a single apostrophe),
+      // convert it to your speak command.
+      if (cmd.startsWith("'")) {
+        const message = cmd.slice(1).trim();
+        if (!message) return; // ignore empty speech like just "'"
+        runCommand(`speak ${message}`);
+        return;
+      }
+
+      // Otherwise, execute the command as-is
+      runCommand(cmd);
+    };
+
+    window.addEventListener("ai-command", onAICommand as EventListener);
+    return () => window.removeEventListener("ai-command", onAICommand as EventListener);
   }, []);
 
   // Enhanced EntryKit debugging and session client sharing
@@ -151,12 +220,23 @@ export function App() {
     testConnectivity();
   }, []);
 
-  // Health status polling
+  // Health status polling - use session client address instead of wagmi address
   useEffect(() => {
-    if (!address || !isConnected) return;
+    console.log('Health polling useEffect triggered', { sessionClient, isConnected });
+    
+    // Get address from session client instead of wagmi
+    const sessionAddress = sessionClient?.account?.address || 
+                          (typeof sessionClient?.account === 'string' ? sessionClient.account : null);
+    
+    if (!sessionAddress || !isConnected) {
+      console.log('Health polling skipped - no session address or not connected');
+      return;
+    }
     
     const updateHealth = async () => {
-      const status = await getHealthStatus(address);
+      console.log('updateHealth called for session address:', sessionAddress);
+      const status = await getHealthStatus(sessionAddress);
+      console.log('Health status received:', status);
       setHealthStatus(status);
     };
     
@@ -165,12 +245,37 @@ export function App() {
     
     // Update every 60 seconds
     const interval = setInterval(updateHealth, 60000);
-    return () => clearInterval(interval);
-  }, [address, isConnected]);
+    console.log('Health polling interval set:', interval);
+    return () => {
+      console.log('Health polling interval cleared');
+      clearInterval(interval);
+    };
+  }, [sessionClient, isConnected]);
 
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
-    const command = input.trim().toLowerCase();
+    const raw = input.trim();
+    const command = raw.toLowerCase(); // routing only
+
+    // If we're mid registerai wizard, forward RAW (preserve casing)
+    if (isInRegisterAISetup()) {
+      setLog(prev => [...prev, `> [input received]`]);  // mask: don’t show secrets
+      runCommand(`registerai ${raw}`);
+      setInput('');
+      return;
+    }
+
+    // Not in wizard: show exactly what user typed
+    //setLog(prev => [...prev, `> ${raw}`]);
+
+    // Starting/continuing registerai on a single line
+    if (command.startsWith('registerai')) {
+      const args = raw.slice('registerai'.length).trim(); // peel from RAW
+      runCommand(`registerai ${args}`);
+      setInput('');
+      return;
+    }
+
     if (!command) return;
     
     setLog(prev => [...prev, `> ${command}`]);
@@ -180,6 +285,12 @@ export function App() {
 
     if (!isConnected) {
       setLog(prev => [...prev, '🔒 Please connect your wallet first. Click "Sign In" in top corner ']);
+      return;
+    }
+
+    // Check if we're in registerai setup FIRST - before any other command parsing
+    if (isInRegisterAISetup()) {
+      runCommand(`registerai ${command}`);
       return;
     }
 
@@ -195,6 +306,15 @@ export function App() {
     } else if (command.startsWith('explore ') || command.startsWith('exp ')) {
       const direction = command.startsWith('explore ') ? command.split(' ')[1] : command.split(' ')[1];
       runCommand(`explore ${direction}`);
+    } else if (command.startsWith('registerai')) {
+      const args = command.split(' ').slice(1);
+      runCommand(`registerai ${args.join(' ')}`);
+    } else if (command.startsWith('ai ') || command === 'ai') {
+      runCommand(command);
+    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
+      const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
+      console.log(`Move command: ${direction}, Address: ${address}`);
+      runCommand(`move ${direction}`);
     } else if (command === 'survey') {
       runCommand('survey');
     } else if (command === 'water') {
@@ -203,10 +323,6 @@ export function App() {
       runCommand('done');
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
-    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
-      const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
-      console.log(`Move command: ${direction}, Address: ${address}`);
-      runCommand(`move ${direction}`);
     } else if (command.startsWith('mine ') || command === 'mine') {
       const target = command.startsWith('mine ') ? command.split(' ')[1] : undefined;
       runCommand(`mine${target ? ` ${target}` : ''}`);
@@ -234,9 +350,7 @@ export function App() {
       } else {
         setLog(prev => [...prev, `<span class="speak-prefix">You say,</span> <span class="speak-message">"${message}"</span>`]);
       }
-    }
-    // Game commands
-    else if (command === 'players' || command === 'who') {
+    } else if (command === 'players' || command === 'who') {
       setLog(prev => [...prev, `👥 Player data not available without sync`]);
     } else if (command === 'balance' || command === 'bal') {
       const formatted = balanceData
@@ -320,9 +434,14 @@ export function App() {
             />
           </div>
           <div className="flex items-center gap-4">
-            {healthStatus && (
+            {healthStatus && healthStatus.isAlive && (
               <div className="text-sm">
                 ❤️ {healthStatus.lifePercentage.toFixed(1)}%
+              </div>
+            )}
+            {healthStatus && !healthStatus.isAlive && (
+              <div className="text-sm">
+                💀 Dead
               </div>
             )}
             {livingPlayers !== null &&(
@@ -333,6 +452,20 @@ export function App() {
                 💰 {parseFloat(formatUnits(balanceData.value, 18)).toFixed(5)} ETH
               </div>
             )}
+            <img 
+              src="/bevel embossdeep.png" 
+              alt={aiOn ? "Stop AI" : "Start AI"}
+              onClick={() => (aiOn ? stopAI() : startAI())}
+              style={{ 
+                height: '56px', 
+                width: 'auto', 
+                cursor: 'pointer',
+                transition: 'opacity 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              title={aiOn ? "🛑 Stop AI" : "🤖 Start AI"}
+            />
             <AccountButton />
           </div>
         </div>

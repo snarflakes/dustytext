@@ -321,7 +321,7 @@ export class RegisterAICommand implements CommandHandler {
     }));
     
     const suggestions = {
-      'OpenAI': 'gpt-4o-mini, o4-mini, gpt-4o, gpt-3.5-turbo',
+      'OpenAI': 'gpt-4.1-mini, o4-mini, gpt-4o, gpt-3.5-turbo',
       'Azure OpenAI': 'gpt-4, gpt-35-turbo (deployment name)',
       'OpenRouter': 'openai/gpt-4o-mini, anthropic/claude-3-sonnet',
       'Custom': 'depends on your local setup'

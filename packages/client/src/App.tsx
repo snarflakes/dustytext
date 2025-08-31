@@ -106,17 +106,27 @@ export function App() {
     return () => window.removeEventListener("worker-log", onWorkerLog as EventListener);
   }, []);
 
-
-  // Execute AI-suggested commands (only when AI is ON)
+// Execute AI-suggested commands (only when AI is ON)
   useEffect(() => {
     const onAICommand = (e: Event) => {
       const ev = e as CustomEvent<{ command: string; source: "AI" }>;
-      if (!ev.detail?.command) return;
+      const cmd = String(ev.detail?.command ?? "").trim();
+      if (!cmd) return;
 
       // Optional safety: don’t execute if AI was turned off between emit & handle
       if (!aiOnRef.current) return;
 
-      runCommand(ev.detail.command); // goes into your normal pipeline
+      // If the AI produced a speaking line (starts with a single apostrophe),
+      // convert it to your speak command.
+      if (cmd.startsWith("'")) {
+        const message = cmd.slice(1).trim();
+        if (!message) return; // ignore empty speech like just "'"
+        runCommand(`speak ${message}`);
+        return;
+      }
+
+      // Otherwise, execute the command as-is
+      runCommand(cmd);
     };
 
     window.addEventListener("ai-command", onAICommand as EventListener);

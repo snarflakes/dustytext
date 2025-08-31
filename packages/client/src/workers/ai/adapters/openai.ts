@@ -297,7 +297,17 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
 
         const raw = await call(body);
 
-        const normalized = normalizeForExec(raw);
+        
+        let normalized = normalizeForExec(raw);
+
+        // If it's a speaking line but the inside is a valid command, treat it as a command
+        if (normalized.startsWith("'")) {
+          const inner = normalized.slice(1).trim();
+          if (isAllowedCommand(inner, compiledAllowed)) {
+            normalized = inner;
+          }
+        }
+
         const allowed = isAllowedCommand(normalized, compiledAllowed);
 
         if (cfg.debugLogging) {

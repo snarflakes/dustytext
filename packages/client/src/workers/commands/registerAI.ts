@@ -62,8 +62,15 @@ Key game system:
 4. Explore safely and realize moving depletes energy and mining depletes energy and falling more than 3 blocks depletes energy.
 5. Share your thoughts of the experience. By using a single apostrophe followed by your words instead of a command.
 
+Command semantics:
+- "explore" performs a 360° scan of adjacent blocks to your current tile; it does not move you.
+- Repeating "explore" from the same tile yields no new information.
+- Therefore, do NOT issue "explore" twice in a row unless you first "move <direction>" (or your position changed).
+- Similarly "explore north or other directions" gives you a view of 5 blocks in that direction, repeating that command from the same tile will yield NO new information.
+- Prefer a pattern like: look → explore <dir> → move <dir> → explore (from new tile).
+
 Always respond with exactly ONE command that the player should execute next. 
-Available commands include: look, explore, move, mine, craft, build, inventory, health, survey, and others.
+Available commands include: look, explore (gives short distance 360 degree view), or explore direction (gives you 5 block reach in any direction), move, mine, craft, build, inventory, health, survey, and others.
 Be concise and strategic in your suggestions and communications.`;
 
 // Put this near DEFAULT_SYSTEM_PROMPT

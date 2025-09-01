@@ -120,6 +120,8 @@ export function App() {
       // convert it to your speak command.
       if (cmd.startsWith("'")) {
         const message = cmd.slice(1).trim();
+      //tag AI speaking line  
+        appendAILog(`[AI_SAY] ${message}`);
         if (!message) return; // ignore empty speech like just "'"
         runCommand(`speak ${message}`);
         return;
@@ -343,11 +345,13 @@ export function App() {
     } else if (command === 'build') {
       runCommand('build');
     } else if (command.startsWith("'")) {
+
       // Handle speak command directly - remove the leading quote
       const message = command.substring(1);
       if (!message.trim()) {
         setLog(prev => [...prev, "❓ What do you want to say? Use: 'your message here"]);
       } else {
+        appendAILog(`[PLAYER_SAY] ${message}`);   // tag human speech for model
         setLog(prev => [...prev, `<span class="speak-prefix">You say,</span> <span class="speak-message">"${message}"</span>`]);
       }
     } else if (command === 'players' || command === 'who') {

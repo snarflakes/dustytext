@@ -102,7 +102,7 @@ export const DEFAULT_ALLOWED_COMMANDS = [
   "'"
 ];
 
-function buildDefaultSystemPrompt(allowed: string[]): string {
+export function buildDefaultSystemPrompt(allowed: string[]): string {
   const shown = allowed.map(c => {
     if (c === "'") return "'<message>' (example: 'I am here.)";
     if (c.endsWith(" ")) return `${c}<value>`;

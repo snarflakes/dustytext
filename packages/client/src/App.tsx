@@ -311,6 +311,9 @@ export function App() {
     } else if (command.startsWith('registerai')) {
       const args = command.split(' ').slice(1);
       runCommand(`registerai ${args.join(' ')}`);
+    } else if (command.startsWith('customai')) {
+      const args = command.split(' ').slice(1);
+      runCommand(`customai ${args.join(' ')}`);
     } else if (command.startsWith('ai ') || command === 'ai') {
       runCommand(command);
     } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {

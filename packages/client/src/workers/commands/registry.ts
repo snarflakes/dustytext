@@ -20,6 +20,7 @@ import { WaterCommand } from './water';
 import { RegisterAICommand } from './registerAI.js';
 import { AICommand } from './ai';
 import { ClickCommand } from './click'; // optional
+import { CustomAICommand } from './customAI';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -47,6 +48,7 @@ commands.set('registerai', new RegisterAICommand());
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"
 commands.set('click', new ClickCommand());  // optional
+commands.set('customai', new CustomAICommand());
 
 // Debug logging
 console.log('Registry: Available commands:', Array.from(commands.keys()));

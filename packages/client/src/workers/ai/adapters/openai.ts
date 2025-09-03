@@ -250,7 +250,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
           {
             address: snap.address,
             recentCommands: recentCmds.slice(-8),
-            recentLog: cleanLog.slice(-40),
+            recentLog: cleanLog.slice(-30),
           },
           null,
           2
@@ -263,7 +263,8 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
         const preferences =
           `Preferences:\n` +
           `- Previous command: ${lastCmd || "none"}.\n` +
-          `- It’s OK to repeat if truly best.\n`;
+          `- 'mine' MUST be bare (no arguments like "down" or "grass").\n`+
+          `- NEVER repeat the same verb two turns in a row, EXCEPT move <direction>.\n`;
 
         // Output contract (allows speaking via leading apostrophe)
         const outputContract =

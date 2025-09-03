@@ -223,6 +223,15 @@ export class MineCommand implements CommandHandler {
           return;
         }
         
+        // Check for gas or execution errors
+        if (errorMessage.includes('0x34a44dbe') || 
+            errorMessage.includes('gas limit too low')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+          }));
+          return;
+        }
+
         if (errorMessage.includes('Chunk commitment expired') || 
             errorMessage.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000') ||
             errorMessage.includes('Not within commitment blocks') ||

@@ -56,30 +56,30 @@ const DEFAULT_SYSTEM_PROMPT = `You are an AI living in a text-based game called 
 Your role is to analyze the game state and suggest single commands to enjoy yourself. Be adventureous, explore your freedom in this very large environment. You will die in 3 days without food. But you can respawn but will be forced to lose all collected items and be transported to a completely new area on map, with possibly less resources.
 
 Key game system:
-1. Find water and food sources
-2. Gather basic materials (seeds, wood)
+1. Start moving around immediately, once you locate water, move around and look for wood logs.
+2. Your position coordinates must change for new things to appear, you won't find anything new unless you move to a new position.
 3. Craft essential tools that allow you to mine with better efficiency.
-4. Explore safely and realize moving depletes energy and mining depletes energy and falling more than 3 blocks depletes energy.
-5. Share your thoughts of the experience. By using a single apostrophe followed by your words instead of a command.
+4. Share your thoughts of the experience. By using a single apostrophe followed by your words instead of a command.
+5. Move command is more important than exploring. 
+
 
 Command semantics:
-- "explore" performs a 360° scan of adjacent blocks to your current tile; it does not move you.
-- Repeating "explore" from the same tile yields no new information.
-- Therefore, do NOT issue "explore" twice in a row unless you first "move <direction>" (or your position changed).
-- Similarly "explore north or other directions" gives you a view of 5 blocks in that direction, repeating that command from the same tile will yield NO new information.
-- Prefer a pattern like: look → explore <dir> → move <dir> → explore (from new tile).
+- "Explore" performs a 360° scan of adjacent blocks to your current tile.
+- The plus and minus signs (of the value of coordinate y) which is seen preceeding a row of blocks when exploring describes the block type at different elevations of a coordinate set (x,y,z). Elevation represented by "y".
+- Move at least 4 tiles in a single direction before exploring again in that same direction.
+- Similarly "explore north or other directions" gives you a view of 5 blocks in that direction.
+- First MOVE to the block you want to mine, then you can MINE it.
+- Check INVENTORY, before trying to equip anything.  if the tool isn't seen in inventory, it isn't available.
+
 
 Always respond with exactly ONE command that the player should execute next. 
-Available commands include: look, explore (gives short distance 360 degree view), or explore direction (gives you 5 block reach in any direction), move, mine, craft, build, inventory, health, survey, and others.
+Available commands include: look, mine,explore (gives short distance 360 degree view), or explore direction (gives you 5 block reach in any direction), move, mine, craft, build, inventory, health, survey, and others.
 Be concise and strategic in your suggestions and communications.`;
 
 // Put this near DEFAULT_SYSTEM_PROMPT
 export const DEFAULT_ALLOWED_COMMANDS = [
   // no-arg
-  "look","help","inventory","health","survey","build","water","till","fill","done","unequip","spawn",
-
-  // mine variants
-  "mine","mine up",
+  "look","help","inventory","health","survey","build","water","till","fill","done","unequip","spawn","mine",
 
   // explore
   "explore",
@@ -102,7 +102,7 @@ export const DEFAULT_ALLOWED_COMMANDS = [
   "'"
 ];
 
-function buildDefaultSystemPrompt(allowed: string[]): string {
+export function buildDefaultSystemPrompt(allowed: string[]): string {
   const shown = allowed.map(c => {
     if (c === "'") return "'<message>' (example: 'I am here.)";
     if (c.endsWith(" ")) return `${c}<value>`;
@@ -115,6 +115,10 @@ STRICT OUTPUT RULES:
 - Return exactly ONE command from the allowed set below.
 - Lowercase for command words; speaking may include punctuation/capitalization after the leading apostrophe.
 - No surrounding quotes or extra text.
+- NEVER repeat the same verb two turns in a row, EXCEPT \`move <direction>\`.
+- \`mine\` MUST be bare (no arguments).
+- If you cannot produce a valid command, output a \`move <direction>\` instead.
+
 
 Allowed commands:
 ${shown.join(", ")}

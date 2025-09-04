@@ -262,7 +262,8 @@ export class MoveCommand implements CommandHandler {
       const errorMessage = String(error);
       
       // Check for gas limit error
-      if (errorMessage.includes('gas limit too low')) {
+      if (errorMessage.includes('0x34a44dbe') || 
+          errorMessage.includes('gas limit too low')) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
         }));

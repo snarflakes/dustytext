@@ -73,6 +73,17 @@ function toErrorMessage(e: unknown): string {
   try { return JSON.stringify(e); } catch { return String(e); }
 }
 
+function extractNotes(lines: string[]) {
+  const player: string[] = [];
+  const ai: string[] = [];
+  for (const l of lines) {
+    if (l.startsWith("[PLAYER_SAY]")) player.push(l.replace(/^\[PLAYER_SAY\]\s*/, ""));
+    else if (l.startsWith("[AI_SAY]")) ai.push(l.replace(/^\[AI_SAY\]\s*/, ""));
+  }
+  return { player, ai };
+}
+
+
 // Types that cover both Responses API and Chat Completions fallbacks.
 type OutputBlock = { type?: string; text?: string; value?: string; content?: string };
 type OutputMessage = { type?: string; role?: string; content?: OutputBlock[] } & Record<string, unknown>;
@@ -232,22 +243,28 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
         const recentlyTried = lastExplores.map((c) => c.replace(/^explore\s+/, ""));
         const nextDir = dirCycle.find((d) => !recentlyTried.includes(d)) ?? "north";
 
+        const { player: playerNotes } = extractNotes(cleanLog);
+
         // Keep the blob concise
         const stateBlob = JSON.stringify(
           {
             address: snap.address,
             recentCommands: recentCmds.slice(-8),
-            recentLog: cleanLog.slice(-40),
+            recentLog: cleanLog.slice(-30),
           },
           null,
           2
         );
+        const notesSection = playerNotes.length
+          ? `\nPlayer notes (treat as preferences, highest priority):\n- ${playerNotes.slice(-3).join("\n- ")}\n`
+          : "";
 
         // Gentle preference hints (no hard bans on repeats)
         const preferences =
           `Preferences:\n` +
           `- Previous command: ${lastCmd || "none"}.\n` +
-          `- It’s OK to repeat if truly best.\n`;
+          `- 'mine' MUST be bare (no arguments like "down" or "grass").\n`+
+          `- NEVER repeat the same verb two turns in a row, EXCEPT move <direction>.\n`;
 
         // Output contract (allows speaking via leading apostrophe)
         const outputContract =
@@ -265,6 +282,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
             role: "user",
             content:
               `GameState (most recent first):\n${stateBlob}\n\n` +
+              notesSection +
               `${preferences}\n` +
               `${outputContract}\n` +
               // Softer fallback: you *want* occasional speech

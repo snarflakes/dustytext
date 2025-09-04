@@ -1,8 +1,8 @@
 <img width="180" height="120" alt="dusttext logosmallest" src="https://github.com/user-attachments/assets/8548d4dd-6d34-44d6-8016-e3da2efaf1a0" />
 
-**DIVE into a text based MUD of yore, updated to the modern onchain DUST world. Energy is conserved. Death comes quick. So walk around and explore the beauty of the DUST world.  All through a custom narrative lens of biomes and terrain.** 
+**DIVE into a text based MUD of yore, updated to the modern onchain DUST world. Energy is conserved. Death comes quick. So walk around and explore the beauty of the DUST world.  All through a custom narrative lens of biomes and terrain. Now insert an LLM for AI COOP gaming!** 
 
-
+[![COOP mode demo](https://img.youtube.com/vi/AUYvukfKF5I/0.jpg)](https://www.youtube.com/watch?v=AUYvukfKF5I)
 
 ** Only deposit small amounts of ETH into the smart contract wallet at a time. There is NO reason to deposit large sums. This is an in-production open source engine, the engine builders receive no compensation. You are responsible for retrieving any lost sums.
 

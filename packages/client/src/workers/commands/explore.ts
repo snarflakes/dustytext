@@ -3,6 +3,9 @@ import { redstone } from "viem/chains";
 import { getTerrainBlockType } from "../../terrain";
 import { objectNamesById, getFlowerDescriptor } from "../../objects";
 import { CommandHandler, CommandContext } from "./types";
+import { addToQueue, clearSelection as clearUnified, queueSizeByAction } from "../../commandQueue"; // adjust path
+import { removeFromQueue, isQueued } from "../../commandQueue";
+
 
 // -----------------------------------------------------------------------------
 // Self-contained encodeBlock (no @dust/world/internal)
@@ -101,21 +104,50 @@ function createClickableBlock(block: SelectableBlock): string {
   return cell(link);
 }
 
+type BlockClickDetail = { blockData?: string; blockId?: string };
+
+function resolveBlockFromId(id: string): SelectableBlock | null {
+  const el = document.querySelector<HTMLElement>(`.clickable-block[data-id="${id}"]`);
+  if (!el) return null;
+  const json = el.getAttribute("data-block");
+  if (!json) return null;
+  try { return JSON.parse(json) as SelectableBlock; } catch { return null; }
+}
+
 function handleBlockClick(event: Event) {
-  const customEvent = event as CustomEvent;
-  const blockData = JSON.parse(customEvent.detail.blockData);
-  if (selectedBlocks.find(b => b.x===blockData.x && b.y===blockData.y && b.z===blockData.z)) {
-    selectedBlocks = selectedBlocks.filter(b => !(b.x===blockData.x && b.y===blockData.y && b.z===blockData.z));
-    window.dispatchEvent(new CustomEvent("worker-log", { detail: `❌ Removed ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) from mining queue. ${selectedBlocks.length} blocks queued.` }));
-  } else {
-    selectedBlocks.push(blockData);
-    window.dispatchEvent(new CustomEvent("worker-log", { detail: `✅ Added ${blockData.name} at (${blockData.x}, ${blockData.y}, ${blockData.z}) to mining queue. ${selectedBlocks.length} blocks queued.` }));
+  const customEvent = event as CustomEvent<BlockClickDetail>;
+
+  // 1) Resolve the clicked block (from data or id)
+  let block: SelectableBlock | null = null;
+  if (customEvent.detail?.blockData) {
+    try { block = JSON.parse(customEvent.detail.blockData) as SelectableBlock; } catch { 
+      // Ignore JSON parse errors, block will remain null
+    }
+  } else if (customEvent.detail?.blockId) {
+    block = resolveBlockFromId(customEvent.detail.blockId);
   }
-  if (selectedBlocks.length > 0 && !isSelectionMode) {
-    isSelectionMode = true;
-    window.dispatchEvent(new CustomEvent("worker-log", { detail: `💡 Type 'done' when you have selected all desired blocks to mine.` }));
+  if (!block) {
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "⚠️ Couldn’t resolve clicked block." }));
+    return;
+  }
+
+  // 2) Queue via unified queue (human source). Dedupe is handled inside addToQueue.
+  const core = { x: block.x, y: block.y, z: block.z, name: block.name, layer: block.layer };
+  if (isQueued(currentAction, core)) {
+    removeFromQueue(currentAction, core);
+    const n = queueSizeByAction(currentAction);
+    window.dispatchEvent(new CustomEvent("worker-log", {
+      detail: `❌ Removed (${currentAction}) ${block.name} at (${block.x}, ${block.y}, ${block.z}). (${n} remain in ${currentAction})`
+    }));
+  } else {
+    addToQueue(currentAction, [core], "human");
+    const n = queueSizeByAction(currentAction);
+    window.dispatchEvent(new CustomEvent("worker-log", {
+      detail: `✅ Queued (${currentAction}) ${block.name} at (${block.x}, ${block.y}, ${block.z}). (${n} ${currentAction} queued; type 'done' to execute)`
+    }));
   }
 }
+
 
 if (typeof window !== "undefined" && !(window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered) {
   window.addEventListener("block-click", handleBlockClick);
@@ -193,7 +225,9 @@ async function resolveObjectTypesFresh(
         try {
           const t = await getTerrainBlockType(client, world, m.pos);
           if (typeof t === "number") map.set(m.k, t);
-        } catch { /* ignore */ }
+        } catch (error) {
+          // Ignore terrain lookup errors and leave as undefined
+        }
       }
     });
     await Promise.all(workers);
@@ -209,12 +243,45 @@ function displayName(t: number | undefined): string {
   return d ? `${d.charAt(0).toUpperCase()}${d.slice(1)} ${base}` : base;
 }
 
+// ---- Put this near the top of explore.ts (above the class) ----
+const ACTIONS = new Set(["mine","water","build","fill","till"]);
+export type ActionName = "mine" | "water" | "build" | "fill" | "till";
+
+let currentAction: ActionName = "mine";
+export function setCurrentAction(a: string) {
+  const v = a?.toLowerCase();
+  if (ACTIONS.has(v)) currentAction = v as ActionName;
+}
+export function getCurrentAction() { return currentAction; }
+
+// Direction helpers used by the class:
+const DIR_ALIASES: Record<string,string> = {
+  n:"north", north:"north", e:"east", east:"east", s:"south", south:"south", w:"west", west:"west",
+  ne:"northeast", northeast:"northeast", nw:"northwest", northwest:"northwest",
+  se:"southeast", southeast:"southeast", sw:"southwest", southwest:"southwest",
+  u:"up", up:"up", d:"down", down:"down",
+};
+const isDir = (t?: string) => !!t && DIR_ALIASES[t.toLowerCase()] !== undefined;
+const normDir = (t: string) => DIR_ALIASES[t.toLowerCase()];
+
 // -----------------------------------------------------------------------------
 // Explore command (batch BOTH modes)
 // -----------------------------------------------------------------------------
+// ---- Drop-in replacement for your ExploreCommand class ----
 export class ExploreCommand implements CommandHandler {
-  async execute(context: CommandContext, direction?: string): Promise<void> {
+  // Accept varargs so we can parse [direction?] [action?]
+  async execute(context: CommandContext, ...args: string[]): Promise<void> {
     try {
+      // Parse optional direction + optional action (action last, default "mine")
+      let direction: string | undefined;
+      if (args[0] && isDir(args[0])) {
+        direction = normDir(args[0]);
+        if (args[1] && ACTIONS.has(args[1].toLowerCase())) setCurrentAction(args[1]);
+      } else if (args[0] && ACTIONS.has(args[0].toLowerCase())) {
+        setCurrentAction(args[0]);
+      }
+      // (No args) keeps currentAction as-is ("mine" by default)
+
       const entityId = encodePlayerEntityId(context.address);
 
       // Position (indexer)
@@ -259,23 +326,21 @@ export class ExploreCommand implements CommandHandler {
         }
 
         const dir = direction.toLowerCase();
-        
-        // Handle vertical exploration differently
+
+        // Vertical exploration (up/down)
         if (dir === "up" || dir === "u" || dir === "down" || dir === "d") {
           const isUp = dir === "up" || dir === "u";
           const positions: Vec3[] = [];
-          
-          // Collect positions for vertical column (0 to +/-10)
           for (let offset = 0; offset <= 10; offset++) {
             const actualOffset = isUp ? offset : -offset;
             positions.push([x, y + actualOffset, z]);
           }
-          
+
           const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, positions);
-          
+
           const lines: string[] = [];
-          lines.push(`Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}):\n`);
-          
+          lines.push(`Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}) — clicks will queue <b>${getCurrentAction()}</b>:\n`);
+
           for (let offset = 0; offset <= 10; offset++) {
             const actualOffset = isUp ? offset : -offset;
             const blockType = typeMap.get(encodeBlock([x, y + actualOffset, z]));
@@ -291,17 +356,16 @@ export class ExploreCommand implements CommandHandler {
             const sign = actualOffset >= 0 ? "+" : "";
             lines.push(`${sign}${actualOffset}: ${createClickableBlock(blockData)}`);
           }
-          
-          const msg = `<pre class="explore-output">${lines.join("\n")}</pre>`;
+
+          const msg = `<pre class="explore-output">${lines.join("\n")}\n\n💡 Type 'done' to run queued ${getCurrentAction()} tasks.</pre>`;
           window.dispatchEvent(new CustomEvent("worker-log", { detail: msg }));
           return;
         }
 
-        // Handle horizontal exploration (existing code)
+        // Horizontal exploration (5-step ray × 5 layers)
         const [dx, dz, dy] = getOffsetForDirection(direction.toLowerCase());
         const columns: { distance: number; coord: string; blocks: string[] }[] = [];
 
-        // collect all positions for 5-step ray × 5 layers
         const positionsDir: Vec3[] = [];
         for (let distance = 1; distance <= 5; distance++) {
           const tx = x + dx * distance;
@@ -310,11 +374,9 @@ export class ExploreCommand implements CommandHandler {
           for (const layerOffset of layers) positionsDir.push([tx, ty + layerOffset, tz]);
         }
 
-        // single batch read + fallback
         const typeMapDir = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, positionsDir);
         const typeAt = (tx: number, ty: number, tz: number) => typeMapDir.get(encodeBlock([tx, ty, tz]));
 
-        // build output
         for (let distance = 1; distance <= 5; distance++) {
           const tx = x + dx * distance, ty = y + dy * distance, tz = z + dz * distance;
           const column: string[] = [];
@@ -333,7 +395,7 @@ export class ExploreCommand implements CommandHandler {
           columns.push({ distance, coord: `(${tx}, ${ty}, ${tz})`, blocks: column });
         }
 
-        const header = `Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}):\n\n`;
+        const header = `Exploring ${direction.toUpperCase()} from (${x}, ${y}, ${z}) — clicks will queue <b>${getCurrentAction()}</b>:\n\n`;
         const coordLine = columns.map(col => cell(`Block ${col.distance}`)).join(" ");
         const posLine   = columns.map(col => cell(col.coord)).join(" ");
 
@@ -344,7 +406,7 @@ export class ExploreCommand implements CommandHandler {
           layerLines.push(`${dy >= 0 ? "+" : ""}${dy}: ${blockCells.join(" ")}`);
         }
 
-        const msg = `<pre class="explore-output">${header}${coordLine}\n${posLine}\n${layerLines.join("\n")}</pre>`;
+        const msg = `<pre class="explore-output">${header}${coordLine}\n${posLine}\n${layerLines.join("\n")}\n\n💡 Type 'done' to run queued ${getCurrentAction()} tasks.</pre>`;
         window.dispatchEvent(new CustomEvent("worker-log", { detail: msg }));
 
       } else {
@@ -400,7 +462,7 @@ export class ExploreCommand implements CommandHandler {
           report.push(`${headerLine}\n${layerLines.join("\n")}`);
         }
 
-        const msg = `<pre class="explore-output">You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).\n\n${report.join("\n\n")}</pre>`;
+        const msg = `<pre class="explore-output">You are at (${x}, ${y}, ${z}), facing ${orientation.label} (${orientation.value}).\n\n${report.join("\n\n")}\n\n💡 Click blocks to queue <b>${getCurrentAction()}</b>, then type 'done'.</pre>`;
         window.dispatchEvent(new CustomEvent("worker-log", { detail: msg }));
       }
     } catch (error) {
@@ -409,13 +471,19 @@ export class ExploreCommand implements CommandHandler {
   }
 }
 
+
 // Export functions for done command
 export { selectedBlocks };
 export function clearSelection() {
-  selectedBlocks.splice(0, selectedBlocks.length);
+  clearUnified();     // clears unified queue + releases owner/pause
   isSelectionMode = false;
-  console.log("Selection cleared, selectedBlocks length:", selectedBlocks.length);
 }
+
+
+
+
+
+
 
 
 

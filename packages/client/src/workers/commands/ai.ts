@@ -1,4 +1,4 @@
-// workers/commands/ai.ts
+// workers/commands/ai.ts  (adjust the relative import paths if your layout differs)
 import { CommandHandler, CommandContext } from "./types";
 import { getAIConfig } from "./registerAI";
 import {
@@ -6,7 +6,7 @@ import {
   getAIClient,
   isAIActive,
   getLogSnapshot,
-  getRecentCommands
+  getRecentCommands,
 } from "../ai/runtime";
 
 function getErrorMessage(err: unknown): string {
@@ -16,6 +16,11 @@ function getErrorMessage(err: unknown): string {
   } catch {
     return String(err);
   }
+}
+
+// Optional: normalize whitespace the model might return
+function normalizeSuggestedCommand(cmd: string): string {
+  return cmd.replace(/\s+/g, " ").trim();
 }
 
 export class AICommand implements CommandHandler {
@@ -37,12 +42,13 @@ export class AICommand implements CommandHandler {
         return;
       }
 
-      // Ensure runtime uses latest config each invocation
+      // Keep runtime in sync with latest config
       setAIRuntimeConfig(cfg);
 
+      // Provide the AI some recent context
       const snapshot = {
         address: ctx.address,
-        recentLog: getLogSnapshot(45), // last 20 terminal lines (plain text)
+        recentLog: getLogSnapshot(45),
         recentCommands: getRecentCommands(8),
       };
 
@@ -58,8 +64,7 @@ export class AICommand implements CommandHandler {
         return;
       }
 
-      const cmd = await client.getNextCommand(snapshot);
-
+      let cmd = await client.getNextCommand(snapshot);
       if (!cmd) {
         window.dispatchEvent(
           new CustomEvent("worker-log", {
@@ -69,13 +74,45 @@ export class AICommand implements CommandHandler {
         );
         return;
       }
+      cmd = normalizeSuggestedCommand(cmd);
 
       window.dispatchEvent(
-        new CustomEvent("worker-log", { detail: `🤖 Suggestion: <b>${cmd}</b>` })
+        new CustomEvent("worker-log", {
+          detail: `🤖 Suggestion: <b>${cmd}</b>`,
+        })
       );
 
       // Auto-mode: hand off to the app to execute via normal pipeline
       if (args[0] === "auto" && isAIActive()) {
+        // Guard against conflicting with a human-owned queue
+        // NOTE: Path mirrors src/commands/index.ts -> '../commandQueue'
+        const q = await import("../../commandQueue");
+        const owner =
+          typeof q.getQueueOwner === "function" ? q.getQueueOwner() : null;
+        const size =
+          typeof q.getQueueSize === "function" ? q.getQueueSize() : 0;
+
+        // If a human owns the unified selection queue, AI should wait
+        if (owner && owner !== "ai") {
+          window.dispatchEvent(
+            new CustomEvent("worker-log", {
+              detail: `⏸️ AI is waiting: human has ${size} item(s) queued. Type 'done' or 'clear' to release.`,
+            })
+          );
+          return;
+        }
+
+        // Belt & suspenders: don't let AI run 'done' on a human-owned queue
+        if (cmd.toLowerCase() === "done" && owner && owner !== "ai") {
+          window.dispatchEvent(
+            new CustomEvent("worker-log", {
+              detail: "⛔ AI won't execute 'done' while the human owns the queue.",
+            })
+          );
+          return;
+        }
+
+        // Hand off suggested command to the normal command pipeline
         window.dispatchEvent(
           new CustomEvent("ai-command", {
             detail: { command: cmd, source: "AI" as const },

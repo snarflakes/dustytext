@@ -1,6 +1,8 @@
 import { encodeFunctionData, parseAbi } from 'viem';
 import { CommandHandler, CommandContext } from './types';
 import { coordToChunkCoord, chunkCommit, packCoord96 } from './chunkCommit';
+import { addToQueue, queueSizeByAction } from "../../commandQueue"; // path as needed
+import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords"; // your helper
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
@@ -58,7 +60,16 @@ async function mineWithOptionalTool(
 export class MineCommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
     const maxRetries = 3;
-    
+    const tuples = parseTuplesFromArgs(args);
+    if (tuples.length > 0 && !looksLikeJsonCoord(args[0])) {
+      addToQueue("mine", tuples, "ai"); // e.g. "mine", "water", "build", "fill", "till"
+      const n = queueSizeByAction("mine");
+      window.dispatchEvent(new CustomEvent("worker-log", {
+        detail: `✅ Queued ${tuples.length} mine target(s). (${n} queued). Type 'done' to execute.`
+      }));
+      return; // skip execute-now — 'done' will run them
+    }
+
     // Parse arguments - check if we have coordinates passed as JSON string
     let target: string | undefined;
     let coords: { x: number, y: number, z: number } | undefined;

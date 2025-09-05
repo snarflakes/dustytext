@@ -322,15 +322,14 @@ export function App() {
       runCommand(`move ${direction}`);
     } else if (command === 'survey') {
       runCommand('survey');
-    } else if (command === 'water') {
-      runCommand('water');
+    } else if (command === 'water' || command.startsWith('water ')) {
+      runCommand(command.trim());
     } else if (command === 'done') {
       runCommand('done');
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
-    } else if (command.startsWith('mine ') || command === 'mine') {
-      const target = command.startsWith('mine ') ? command.split(' ')[1] : undefined;
-      runCommand(`mine${target ? ` ${target}` : ''}`);
+    } else if (command === 'mine' || command.startsWith('mine ')) {
+      runCommand(command.trim());
     } else if (command === 'inventory' || command === 'inv' || command === 'i') {
       runCommand('inventory');
     } else if (command.startsWith('craft ')) {
@@ -341,12 +340,12 @@ export function App() {
       runCommand(`equip ${toolName}`);
     } else if (command === 'unequip') {
       runCommand('unequip');
-    } else if (command === 'till') {
-      runCommand('till');
-    } else if (command === 'fill') {
-      runCommand('fill');
-    } else if (command === 'build') {
-      runCommand('build');
+    } else if (command === 'till' || command.startsWith('till ')) {
+      runCommand(command.trim());
+    } else if (command === 'fill' || command.startsWith('fill ')) {
+      runCommand(command.trim());
+    } else if (command === 'build' || command.startsWith('build ')) {
+      runCommand(command.trim());
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

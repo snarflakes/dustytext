@@ -1,5 +1,6 @@
 import { encodeFunctionData, parseAbi } from 'viem';
 import { CommandHandler, CommandContext } from './types';
+import { withQueuePause } from "../../commandQueue"; // path
 
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
 
@@ -147,58 +148,28 @@ async function trySmartMoveDiagonal(
 
 export class MoveCommand implements CommandHandler {
   async execute(context: CommandContext, direction: string): Promise<void> {
-    try {
-      const lowerDirection = direction.toLowerCase();
-      let directionEnums: number[];
-      
-      // Declare variables at the top
-      const entityId = encodePlayerEntityId(context.address);
-      const beforePos = await getPlayerPosition(entityId);
-      let txHash: string;
-      let moveDescription = direction;
-      
-      // Check if it's a diagonal direction
-      if (diagonalDirections[lowerDirection]) {
-        directionEnums = diagonalDirections[lowerDirection];
+    await withQueuePause(async () => {
+      try {
+        const lowerDirection = direction.toLowerCase();
+        let directionEnums: number[];
         
-        // Use smart move for diagonal directions
-        try {
-          const result = await trySmartMoveDiagonal(context, entityId, directionEnums as DirectionCode[], direction);
-          txHash = result.txHash;
-          moveDescription = result.message;
-        } catch (smartMoveError) {
-          // Fall back to regular diagonal move
-          const data = encodeFunctionData({
-            abi: MOVE_ABI,
-            functionName: 'moveDirections',
-            args: [entityId, directionEnums],
-          });
-
-          txHash = await context.sessionClient.sendTransaction({
-            to: WORLD_ADDRESS,
-            data,
-            gas: 100000n,
-          });
-        }
-      } else {
-        // Single cardinal direction
-        const directionEnum = directionToEnum[lowerDirection];
-        if (directionEnum === undefined) {
-          throw new Error(`Invalid direction: ${direction}`);
-        }
-        directionEnums = [directionEnum];
-
-        // Try smart move for horizontal directions only (exclude Up=2 and Down=3)
-        const useSmartMove = directionEnums.length === 1 && 
-          [0, 1, 4, 5].includes(directionEnums[0]);
-
-        if (useSmartMove) {
+        // Declare variables at the top
+        const entityId = encodePlayerEntityId(context.address);
+        const beforePos = await getPlayerPosition(entityId);
+        let txHash: string;
+        let moveDescription = direction;
+        
+        // Check if it's a diagonal direction
+        if (diagonalDirections[lowerDirection]) {
+          directionEnums = diagonalDirections[lowerDirection];
+          
+          // Use smart move for diagonal directions
           try {
-            const result = await trySmartMove(context, entityId, directionEnums[0] as DirectionCode, direction);
+            const result = await trySmartMoveDiagonal(context, entityId, directionEnums as DirectionCode[], direction);
             txHash = result.txHash;
             moveDescription = result.message;
           } catch (smartMoveError) {
-            // Fall back to regular move if smart move fails
+            // Fall back to regular diagonal move
             const data = encodeFunctionData({
               abi: MOVE_ABI,
               functionName: 'moveDirections',
@@ -212,94 +183,126 @@ export class MoveCommand implements CommandHandler {
             });
           }
         } else {
-          // Regular move for up/down - no smart move needed
-          const data = encodeFunctionData({
-            abi: MOVE_ABI,
-            functionName: 'moveDirections',
-            args: [entityId, directionEnums],
-          });
+          // Single cardinal direction
+          const directionEnum = directionToEnum[lowerDirection];
+          if (directionEnum === undefined) {
+            throw new Error(`Invalid direction: ${direction}`);
+          }
+          directionEnums = [directionEnum];
 
-          txHash = await context.sessionClient.sendTransaction({
-            to: WORLD_ADDRESS,
-            data,
-            gas: 100000n,
-          });
-        }
-      }
-      
-      // Wait for indexer to update
-      await new Promise(resolve => setTimeout(resolve, 2000));
+          // Try smart move for horizontal directions only (exclude Up=2 and Down=3)
+          const useSmartMove = directionEnums.length === 1 && 
+            [0, 1, 4, 5].includes(directionEnums[0]);
 
-      // Get position after move and check elevation change
-      const afterPos = await getPlayerPosition(entityId);
-      let elevationMessage = "";
-      
-      if (beforePos && afterPos) {
-        const elevationChange = afterPos.y - beforePos.y;
-        if (elevationChange < 0) {
-          const drop = Math.abs(elevationChange);
-          if (drop === 1) {
-            elevationMessage = " (you step downwards)";
-          } else if (drop === 2) {
-            elevationMessage = " (you jump down)";
-          } else if (drop >= 3) {
-            elevationMessage = " (You scramble with your footing and fall downwards and take damage)";
+          if (useSmartMove) {
+            try {
+              const result = await trySmartMove(context, entityId, directionEnums[0] as DirectionCode, direction);
+              txHash = result.txHash;
+              moveDescription = result.message;
+            } catch (smartMoveError) {
+              // Fall back to regular move if smart move fails
+              const data = encodeFunctionData({
+                abi: MOVE_ABI,
+                functionName: 'moveDirections',
+                args: [entityId, directionEnums],
+              });
+
+              txHash = await context.sessionClient.sendTransaction({
+                to: WORLD_ADDRESS,
+                data,
+                gas: 100000n,
+              });
+            }
+          } else {
+            // Regular move for up/down - no smart move needed
+            const data = encodeFunctionData({
+              abi: MOVE_ABI,
+              functionName: 'moveDirections',
+              args: [entityId, directionEnums],
+            });
+
+            txHash = await context.sessionClient.sendTransaction({
+              to: WORLD_ADDRESS,
+              data,
+              gas: 100000n,
+            });
           }
         }
-      }
-
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `✅ Move ${moveDescription} completed${elevationMessage}. Tx: ${txHash}` 
-      }));
-
-      // Automatically look after successful move
-      const { getCommand } = await import('./registry');
-      const lookCommand = getCommand('look');
-      if (lookCommand) {
-        await lookCommand.execute(context);
-      }
-    } catch (error) {
-      const errorMessage = String(error);
-      
-      // Check for gas limit error
-      if (errorMessage.includes('0x34a44dbe') || 
-          errorMessage.includes('gas limit too low')) {
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
-        }));
-        return;
-      }
-      
-      // Check for energy error (player is dead)
-      if (errorMessage.includes('Entity has no energy') || 
-          errorMessage.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
-        }));
-        return;
-      }
-      
-      // Check for simulation revert error (blocked path)
-      if (errorMessage.includes('reverted during simulation with reason: 0xbeb9cbe') ||
-          errorMessage.includes('reverted during simulation with reason: 0xfdde54e2e15f95e5')) {
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `❌ Something blocks your way. --Explore-- to see what is stopping you.` 
-        }));
         
-        // Auto-execute explore command
-        const { getCommand } = await import('./registry');
-        const exploreCommand = getCommand('explore');
-        if (exploreCommand) {
-          await exploreCommand.execute(context);
+        // Wait for indexer to update
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Get position after move and check elevation change
+        const afterPos = await getPlayerPosition(entityId);
+        let elevationMessage = "";
+        
+        if (beforePos && afterPos) {
+          const elevationChange = afterPos.y - beforePos.y;
+          if (elevationChange < 0) {
+            const drop = Math.abs(elevationChange);
+            if (drop === 1) {
+              elevationMessage = " (you step downwards)";
+            } else if (drop === 2) {
+              elevationMessage = " (you jump down)";
+            } else if (drop >= 3) {
+              elevationMessage = " (You scramble with your footing and fall downwards and take damage)";
+            }
+          }
         }
-        return;
+
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `✅ Move ${moveDescription} completed${elevationMessage}. Tx: ${txHash}` 
+        }));
+
+        // Automatically look after successful move
+        const { getCommand } = await import('./registry');
+        const lookCommand = getCommand('look');
+        if (lookCommand) {
+          await lookCommand.execute(context);
+        }
+      } catch (error) {
+        const errorMessage = String(error);
+        
+        // Check for gas limit error
+        if (errorMessage.includes('0x34a44dbe') || 
+            errorMessage.includes('gas limit too low')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+          }));
+          return;
+        }
+        
+        // Check for energy error (player is dead)
+        if (errorMessage.includes('Entity has no energy') || 
+            errorMessage.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
+          }));
+          return;
+        }
+        
+        // Check for simulation revert error (blocked path)
+        if (errorMessage.includes('reverted during simulation with reason: 0xbeb9cbe') ||
+            errorMessage.includes('reverted during simulation with reason: 0xfdde54e2e15f95e5')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ Something blocks your way. --Explore-- to see what is stopping you.` 
+          }));
+          
+          // Auto-execute explore command
+          const { getCommand } = await import('./registry');
+          const exploreCommand = getCommand('explore');
+          if (exploreCommand) {
+            await exploreCommand.execute(context);
+          }
+          return;
+        }
+        
+        // Generic error message
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `❌ Move failed: ${error}` 
+        }));
       }
-      
-      // Generic error message
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `❌ Move failed: ${error}` 
-      }));
-    }
+    })
   }
 }
 

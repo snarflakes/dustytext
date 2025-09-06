@@ -132,7 +132,8 @@ export class FillCommand implements CommandHandler {
     } catch (error) {
       const errorMessage = String(error);
 
-      if (errorMessage.includes("Not water")) {
+      if (errorMessage.includes("Not water") ||
+          errorMessage.includes("4e6f742077617465720000000000000000000000000000000000000000000000")) {
         window.dispatchEvent(
           new CustomEvent("worker-log", { detail: "❌ You must be standing in or targeting water to fill a bucket." })
         );
@@ -154,6 +155,7 @@ export class FillCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

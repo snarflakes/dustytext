@@ -172,9 +172,14 @@ export class BuildCommand implements CommandHandler {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ Cannot build where items are on the ground."
         }));
-      } else if (errorMessage.includes("Cannot build on a movable entity")) {
+      } else if (errorMessage.includes("Cannot build where an entity is standing")) {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ Cannot build where an entity is standing."
+        }));
+      } else if (errorMessage.includes("Cannot plant on this block") ||
+                 errorMessage.includes("43616e6e6f7420706c616e74206f6e207468697320626c6f636b")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ Cannot plant seeds on this block type. Seeds need to be planted on farmland ('till'ed dirt) that has been watered by a water bucket."
         }));
       } else {
         window.dispatchEvent(new CustomEvent("worker-log", {
@@ -184,4 +189,5 @@ export class BuildCommand implements CommandHandler {
     }
   }
 }
+
 

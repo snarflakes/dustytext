@@ -193,7 +193,8 @@ export class MineCommand implements CommandHandler {
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `✅ Mining${targetText} completed at ${positionText}${toolText}. Tx: ${txHash}` 
         }));
-
+        return;
+        
         // Auto-look after mining
         // await new Promise(resolve => setTimeout(resolve, 1000));
         // const { getCommand } = await import('./registry');

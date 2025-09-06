@@ -136,12 +136,12 @@ export class BuildCommand implements CommandHandler {
       }
 
       // optional: auto-look
-      await new Promise(r => setTimeout(r, 1000));
-      try {
-        const { getCommand } = await import("./registry");
-        const lookCommand = getCommand("look");
-        if (lookCommand) await lookCommand.execute(context);
-      } catch { /* no-op */ }
+      //await new Promise(r => setTimeout(r, 1000));
+      //try {
+      //  const { getCommand } = await import("./registry");
+      //  const lookCommand = getCommand("look");
+      //  if (lookCommand) await lookCommand.execute(context);
+      //} catch { /* no-op */ }
 
     } catch (error) {
       const errorMessage = String(error);

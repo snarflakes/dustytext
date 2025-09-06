@@ -3,9 +3,9 @@ import { redstone } from "viem/chains";
 import { getTerrainBlockType } from "../../terrain";
 import { objectNamesById, getFlowerDescriptor } from "../../objects";
 import { CommandHandler, CommandContext } from "./types";
-import { addToQueue, clearSelection as clearUnified, queueSizeByAction } from "../../commandQueue"; // adjust path
+import { addToQueue, queueSizeByAction } from "../../commandQueue"; // adjust path
 import { removeFromQueue, isQueued } from "../../commandQueue";
-
+import { isFullyGrown } from './grown';
 
 // -----------------------------------------------------------------------------
 // Self-contained encodeBlock (no @dust/world/internal)
@@ -90,8 +90,8 @@ interface SelectableBlock {
   distance?: number;
   layer: number;
 }
-let selectedBlocks: SelectableBlock[] = [];
-let isSelectionMode = false;
+//let selectedBlocks: SelectableBlock[] = [];
+//let isSelectionMode = false;
 
 function createClickableBlock(block: SelectableBlock): string {
   if (block.name === "Air" || block.name === "Empty") return cell(block.name);
@@ -249,11 +249,25 @@ async function resolveObjectTypesFresh(
   return map;
 }
 
-function displayName(t: number | undefined): string {
+async function displayName(t: number | undefined, pos?: Vec3): Promise<string> {
   if (typeof t !== "number") return "Air";
   const base = objectNamesById[t] ?? `Unknown(${t})`;
   const d = getFlowerDescriptor(t);
-  return d ? `${d.charAt(0).toUpperCase()}${d.slice(1)} ${base}` : base;
+  let name = d ? `${d.charAt(0).toUpperCase()}${d.slice(1)} ${base}` : base;
+  
+  // Check if WheatSeed is fully grown
+  if (base === "WheatSeed" && pos) {
+    try {
+      const isGrown = await isFullyGrown(pos);
+      if (isGrown) {
+        name = "WheatSeed(G)";
+      }
+    } catch (error) {
+      // Ignore growth check errors
+    }
+  }
+  
+  return name;
 }
 
 // ---- Put this near the top of explore.ts (above the class) ----
@@ -363,7 +377,7 @@ export class ExploreCommand implements CommandHandler {
           for (let offset = 0; offset <= 10; offset++) {
             const actualOffset = isUp ? offset : -offset;
             const blockType = typeMap.get(encodeBlock([x, y + actualOffset, z]));
-            const blockName = displayName(blockType);
+            const blockName = await displayName(blockType, [x, y + actualOffset, z]);
             const blockData: SelectableBlock = {
               x: x,
               y: y + actualOffset,
@@ -400,7 +414,8 @@ export class ExploreCommand implements CommandHandler {
           const tx = x + dx * distance, ty = y + dy * distance, tz = z + dz * distance;
           const column: string[] = [];
           for (const layerOffset of layers) {
-            const blockName = displayName(typeAt(tx, ty + layerOffset, tz));
+            const blockPos: Vec3 = [tx, ty + layerOffset, tz];
+            const blockName = await displayName(typeAt(tx, ty + layerOffset, tz), blockPos);
             const blockData: SelectableBlock = {
               x: tx,
               y: ty + layerOffset,
@@ -470,7 +485,7 @@ export class ExploreCommand implements CommandHandler {
           for (const dy of layers) {
             const blockCells = await Promise.all(row.map(async dir => {
               const tx = x + dir.dx, tz = z + dir.dz, ty = y + dy;
-              const name = displayName(typeAtGrid(tx, ty, tz));
+              const name = await displayName(typeAtGrid(tx, ty, tz), [tx, ty, tz]);
               const blockData: SelectableBlock = { x: tx, y: ty, z: tz, name, layer: dy };
               const clickableBlock = createClickableBlock(blockData);
               const prefix = (dir.label === "YOU" && (dy === 0 || dy === 1)) ? "YOU:" : "";
@@ -492,11 +507,18 @@ export class ExploreCommand implements CommandHandler {
 
 
 // Export functions for done command
-export { selectedBlocks };
-export function clearSelection() {
-  clearUnified();     // clears unified queue + releases owner/pause
-  isSelectionMode = false;
-}
+//export { selectedBlocks };
+//export function clearSelection() {
+//  clearUnified();     // clears unified queue + releases owner/pause
+//  isSelectionMode = false;
+//}
+
+
+
+
+
+
+
 
 
 

@@ -21,6 +21,7 @@ import { RegisterAICommand } from './registerAI.js';
 import { AICommand } from './ai';
 import { ClickCommand } from './click'; // optional
 import { CustomAICommand } from './customAI';
+import { EatCommand } from './eat.js';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -44,6 +45,7 @@ commands.set('till', new TillCommand());
 commands.set('fill', new FillCommand());
 commands.set('water', new WaterCommand());
 commands.set('registerai', new RegisterAICommand());
+commands.set('eat', new EatCommand());
 
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"

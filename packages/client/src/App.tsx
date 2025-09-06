@@ -316,7 +316,7 @@ export function App() {
       runCommand(`customai ${args.join(' ')}`);
     } else if (command.startsWith('ai ') || command === 'ai') {
       runCommand(command);
-    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
+    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down'].includes(command)) {
       const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
       console.log(`Move command: ${direction}, Address: ${address}`);
       runCommand(`move ${direction}`);
@@ -324,8 +324,10 @@ export function App() {
       runCommand('survey');
     } else if (command === 'water' || command.startsWith('water ')) {
       runCommand(command.trim());
-    } else if (command === 'done') {
+    } else if (command === 'done' || command === 'd') {
       runCommand('done');
+    } else if (command === 'eat') {
+      runCommand('eat');
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
     } else if (command === 'mine' || command.startsWith('mine ')) {

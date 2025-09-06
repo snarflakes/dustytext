@@ -136,7 +136,9 @@ export class FillCommand implements CommandHandler {
         window.dispatchEvent(
           new CustomEvent("worker-log", { detail: "❌ You must be standing in or targeting water to fill a bucket." })
         );
-      } else if (errorMessage.includes("Must use an empty Bucket")) {
+      } else if (errorMessage.includes("Must use an empty Bucket") || 
+                 errorMessage.includes("Must use an empty bucket") ||
+                 errorMessage.includes("4d7573742075736520616e20656d707479204275636b65740000000000000000")) {
         window.dispatchEvent(
           new CustomEvent("worker-log", { detail: "❌ You must equip an empty bucket to fill with water." })
         );
@@ -146,3 +148,5 @@ export class FillCommand implements CommandHandler {
     }
   }
 }
+
+

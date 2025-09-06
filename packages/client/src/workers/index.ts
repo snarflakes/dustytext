@@ -99,17 +99,35 @@ async function runWorkerCommand(command: string): Promise<void> {
     }
   }
 
-  // Clear mining queue for any command except 'done'
-  if (commandName !== 'done') {
+
+  const NON_CLEARING = new Set(["done","mine","water","build","fill","till","move","look","health","ai","aiauto","ai_auto","explore","exp"]);
+  if (!NON_CLEARING.has(commandName)) {
     try {
-      const { clearSelection } = await import('./commands/explore');
-      clearSelection();
-      console.log('Cleared mining selection for non-done command:', commandName);
-    } catch (error) {
-      console.log('Failed to clear selection:', error);
-      // Ignore if explore module isn't available
+      const mod = await import("../commandQueue"); // use unified clear
+      if (typeof mod.clearSelection === "function") {
+        mod.clearSelection();
+      } else {
+        // eslint-disable-next-line no-console
+        console.debug("[commands/index] clearSelection not exported from commandQueue");
+      }
+    } catch (e: unknown) {
+      // eslint-disable-next-line no-console
+      console.debug("[commands/index] clearSelection import skipped:", e);
     }
   }
+
+
+  // Clear mining queue for any command except 'done'
+  //if (commandName !== 'done') {
+  //  try {
+  //    const { clearSelection } = await import('./commands/explore');
+  //    clearSelection();
+  //    console.log('Cleared mining selection for non-done command:', commandName);
+  //  } catch (error) {
+  //    console.log('Failed to clear selection:', error);
+      // Ignore if explore module isn't available
+  //  }
+  //}
 
   // Get and execute command
   const handler = getCommand(commandName);

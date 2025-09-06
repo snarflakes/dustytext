@@ -1,70 +1,104 @@
-import { CommandHandler, CommandContext } from './types';
+// workers/commands/done.ts  (adjust path if needed)
+import { CommandHandler, CommandContext } from "./types";
+import {
+  queuedOps,
+  clearSelection,
+  waitIfPaused,
+  type QueuedOp,
+  type Block,
+} from "../../commandQueue";
+
+const delay = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
+
+// Tune execution order to your pipeline
+const ACTION_ORDER: string[] = ["fill", "water", "build", "till", "mine"];
 
 export class DoneCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {
-    // Import the selected blocks from explore command
-    const { selectedBlocks: miningBlocks, clearSelection: clearMiningSelection } = await import('./explore');
-    
-    // Import the selected blocks from water command
-    const { selectedBlocks: wateringBlocks, clearSelection: clearWaterSelection, waterSingleBlock } = await import('./water');
-    
-    if (miningBlocks.length > 0) {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `⛏️ Starting to mine ${miningBlocks.length} selected blocks...` 
+    const snapshot: QueuedOp[] = [...queuedOps]; // read once
+    if (snapshot.length === 0) {
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: "❓ No blocks queued." }));
+      return;
+    }
+
+    // group by action
+    const byAction: Map<string, Block[]> = new Map();
+    for (const op of snapshot) {
+      const arr = byAction.get(op.action) ?? [];
+      arr.push(op.block as Block);
+      byAction.set(op.action, arr);
+    }
+
+    // registry
+    let getCommand: ((name: string) => CommandHandler | undefined) | null = null;
+    try {
+      const reg = await import("./registry");
+      if (typeof reg.getCommand === "function") getCommand = reg.getCommand;
+    } catch (e) {
+      // optional registry import can fail in some environments
+      // eslint-disable-next-line no-console
+      console.debug("[done] registry import skipped:", e);
+    }
+
+    // optional fallback for water
+    let waterFallback: ((ctx: CommandContext, block: Block) => Promise<boolean | void>) | null = null;
+    try {
+      const waterMod: unknown = await import("./water");
+      const wf = (waterMod as { waterSingleBlock?: (ctx: CommandContext, block: Block) => Promise<boolean | void> }).waterSingleBlock;
+      if (typeof wf === "function") {
+        waterFallback = wf.bind(waterMod as object);
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.debug("[done] water fallback not available:", e);
+    }
+
+    const actions: string[] = [...byAction.keys()].sort(
+      (a, b) =>
+        (ACTION_ORDER.indexOf(a) === -1 ? 999 : ACTION_ORDER.indexOf(a)) -
+        (ACTION_ORDER.indexOf(b) === -1 ? 999 : ACTION_ORDER.indexOf(b))
+    );
+
+    for (const action of actions) {
+      const items = byAction.get(action)!; // exists by construction
+      window.dispatchEvent(new CustomEvent("worker-log", {
+        detail: `▶️ ${action}: ${items.length} block(s)...`
       }));
-      
-      // Mine each selected block
-      let successCount = 0;
-      for (const block of miningBlocks) {
+
+      const cmd = getCommand?.(action);
+      let ok = 0;
+
+      for (const block of items) {
+        await waitIfPaused(); // pause point (e.g., while move runs)
+
         try {
-          const { getCommand } = await import('./registry');
-          const mineCommand = getCommand('mine');
-          if (mineCommand) {
-            await mineCommand.execute(context, JSON.stringify(block));
-            successCount++;
+          if (cmd && typeof cmd.execute === "function") {
+            await cmd.execute(context, JSON.stringify(block));
+            ok++;
+          } else if (action === "water" && waterFallback) {
+            const pass = await waterFallback(context, block);
+            if (pass !== false) ok++;
+          } else {
+            window.dispatchEvent(new CustomEvent("worker-log", {
+              detail: `⚠️ No executor for "${action}" at (${block.x},${block.y},${block.z}).`
+            }));
           }
-        } catch (error) {
-          window.dispatchEvent(new CustomEvent("worker-log", { 
-            detail: `❌ Failed to mine block at (${block.x}, ${block.y}, ${block.z}): ${error}` 
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          window.dispatchEvent(new CustomEvent("worker-log", {
+            detail: `❌ ${action} failed at (${block.x},${block.y},${block.z}): ${msg}`
           }));
         }
-        
-        // Small delay between operations
-        await new Promise(resolve => setTimeout(resolve, 500));
+
+        await delay(500);
+        await waitIfPaused(); // pause window before next op
       }
 
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `⛏️ Mining complete! Successfully mined ${successCount}/${miningBlocks.length} blocks.` 
-      }));
-
-      clearMiningSelection();
-    } else if (wateringBlocks.length > 0) {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `💧 Starting to water ${wateringBlocks.length} selected farmland blocks...` 
-      }));
-
-      let successCount = 0;
-      for (const block of wateringBlocks) {
-        const success = await waterSingleBlock(context, block);
-        if (success) successCount++;
-        
-        // Small delay between operations
-        await new Promise(resolve => setTimeout(resolve, 500));
-      }
-
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `💧 Watering complete! Successfully watered ${successCount}/${wateringBlocks.length} blocks.` 
-      }));
-
-      clearWaterSelection();
-    } else {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❓ No blocks selected for mining or watering. Use 'explore' or 'water' first and click on blocks." 
+      window.dispatchEvent(new CustomEvent("worker-log", {
+        detail: `✅ ${action} complete: ${ok}/${items.length} succeeded.`
       }));
     }
+
+    clearSelection(); // release owner & unpause
   }
 }
-
-
-
-

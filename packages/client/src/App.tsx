@@ -305,9 +305,12 @@ export function App() {
       runCommand('health');
     } else if (command === 'explore' || command === 'exp') {
       runCommand('explore');
+
     } else if (command.startsWith('explore ') || command.startsWith('exp ')) {
-      const direction = command.startsWith('explore ') ? command.split(' ')[1] : command.split(' ')[1];
-      runCommand(`explore ${direction}`);
+      // forward EVERYTHING after the verb so explore can parse order-agnostic
+      const tail = command.replace(/^(explore|exp)\s+/i, "");
+      runCommand(`explore ${tail}`);
+    
     } else if (command.startsWith('registerai')) {
       const args = command.split(' ').slice(1);
       runCommand(`registerai ${args.join(' ')}`);
@@ -316,21 +319,22 @@ export function App() {
       runCommand(`customai ${args.join(' ')}`);
     } else if (command.startsWith('ai ') || command === 'ai') {
       runCommand(command);
-    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down', 'd'].includes(command)) {
+    } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down'].includes(command)) {
       const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
       console.log(`Move command: ${direction}, Address: ${address}`);
       runCommand(`move ${direction}`);
     } else if (command === 'survey') {
       runCommand('survey');
-    } else if (command === 'water') {
-      runCommand('water');
-    } else if (command === 'done') {
+    } else if (command === 'water' || command.startsWith('water ')) {
+      runCommand(command.trim());
+    } else if (command === 'done' || command === 'd') {
       runCommand('done');
+    } else if (command === 'eat') {
+      runCommand('eat');
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
-    } else if (command.startsWith('mine ') || command === 'mine') {
-      const target = command.startsWith('mine ') ? command.split(' ')[1] : undefined;
-      runCommand(`mine${target ? ` ${target}` : ''}`);
+    } else if (command === 'mine' || command.startsWith('mine ')) {
+      runCommand(command.trim());
     } else if (command === 'inventory' || command === 'inv' || command === 'i') {
       runCommand('inventory');
     } else if (command.startsWith('craft ')) {
@@ -341,12 +345,12 @@ export function App() {
       runCommand(`equip ${toolName}`);
     } else if (command === 'unequip') {
       runCommand('unequip');
-    } else if (command === 'till') {
-      runCommand('till');
-    } else if (command === 'fill') {
-      runCommand('fill');
-    } else if (command === 'build') {
-      runCommand('build');
+    } else if (command === 'till' || command.startsWith('till ')) {
+      runCommand(command.trim());
+    } else if (command === 'fill' || command.startsWith('fill ')) {
+      runCommand(command.trim());
+    } else if (command === 'build' || command.startsWith('build ')) {
+      runCommand(command.trim());
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

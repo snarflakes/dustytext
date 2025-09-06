@@ -31,7 +31,9 @@ const OBJECT_TYPES: Record<number, string> = {
   32783: "WoodenHoe",
   32788: "Bucket",
   32789: "WaterBucket",
-
+  32790: "WheatSlop",
+  32791: "PumpkinSoup",
+  32792: "MelonSmoothie",
   // Add more as needed
 };
 
@@ -39,6 +41,18 @@ function encodePlayerEntityId(address: string): `0x${string}` {
   const prefix = "01";
   const clean = address.toLowerCase().replace(/^0x/, "");
   return `0x${prefix}${clean.padEnd(64 - prefix.length, "0")}` as `0x${string}`;
+}
+
+function normalize(s: string) {
+        return s.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+function splitTokens(s: string) {
+  // Split camelCase & separators so "WaterBucket" ~ "water bucket"
+  return s
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/g)
+  .filter(Boolean);
 }
 
 async function getPlayerInventory(entityId: `0x${string}`) {
@@ -105,19 +119,47 @@ export class EquipCommand implements CommandHandler {
       console.log('Inventory items:', inventory);
       console.log('Looking for tool:', toolName);
 
-      // Find matching tool
-      const tool = inventory.find(item => 
-        item.objectType.toLowerCase().includes(toolName.toLowerCase()) ||
-        toolName.toLowerCase().includes(item.objectType.toLowerCase())
-      );
+      // --- Find matching tool (backwards-compatible, name-only) ---
+      
+      // 1) Try exact normalized match first
+      const normQuery = normalize(toolName);
+      let tool = inventory.find(i => normalize(i.objectType) === normQuery);
+
+      // 2) If user typed multiple words (e.g., "water bucket"), require all tokens
+      if (!tool) {
+        const qTokens = splitTokens(toolName);
+        if (qTokens.length > 1) {
+          // Prefer items that contain all query tokens
+          const allTokenMatch = inventory.find(i => {
+            const t = splitTokens(i.objectType);
+            return qTokens.every(tok => t.includes(tok));
+          });
+          if (allTokenMatch) tool = allTokenMatch;
+        }
+      }
+
+      // 3) Special nudge: if query contains "water", prefer names with "water" over plain "bucket"
+      if (!tool && /water/i.test(toolName)) {
+        const watery = inventory.find(i => /water/i.test(i.objectType) && /bucket/i.test(i.objectType));
+        if (watery) tool = watery;
+      }
+
+      // 4) Fallback to your original fuzzy includes (keeps legacy behavior)
+      if (!tool) {
+        tool = inventory.find(item =>
+          item.objectType.toLowerCase().includes(toolName.toLowerCase()) ||
+          toolName.toLowerCase().includes(item.objectType.toLowerCase())
+        );
+      }
 
       if (!tool) {
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `❌ Tool "${toolName}" not found in inventory. Available items: ${inventory.map(i => `${i.objectType}(${i.objectTypeId})`).join(', ')}` 
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `❌ Tool "${toolName}" not found in inventory. Available items: ${inventory.map(i => `${i.objectType}(${i.objectTypeId})`).join(', ')}`
         }));
         return;
       }
 
+      
       // Store equipped tool info globally
       (globalThis as typeof globalThis & { equippedTool: EquippedTool | null }).equippedTool = {
         slot: tool.slot,

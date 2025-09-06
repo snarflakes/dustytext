@@ -305,9 +305,12 @@ export function App() {
       runCommand('health');
     } else if (command === 'explore' || command === 'exp') {
       runCommand('explore');
+
     } else if (command.startsWith('explore ') || command.startsWith('exp ')) {
-      const direction = command.startsWith('explore ') ? command.split(' ')[1] : command.split(' ')[1];
-      runCommand(`explore ${direction}`);
+      // forward EVERYTHING after the verb so explore can parse order-agnostic
+      const tail = command.replace(/^(explore|exp)\s+/i, "");
+      runCommand(`explore ${tail}`);
+    
     } else if (command.startsWith('registerai')) {
       const args = command.split(' ').slice(1);
       runCommand(`registerai ${args.join(' ')}`);

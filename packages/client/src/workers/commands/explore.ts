@@ -148,11 +148,24 @@ function handleBlockClick(event: Event) {
   }
 }
 
-
-if (typeof window !== "undefined" && !(window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered) {
-  window.addEventListener("block-click", handleBlockClick);
-  (window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered = true;
+// HMR-safe click binding (prevents stale handlers keeping an old action)
+declare global {
+  interface Window { __blockClickHandlerExplV3__?: (e: Event) => void }
 }
+
+if (typeof window !== "undefined") {
+  if (window.__blockClickHandlerExplV3__) {
+    window.removeEventListener("block-click", window.__blockClickHandlerExplV3__);
+  }
+  window.__blockClickHandlerExplV3__ = handleBlockClick;
+  window.addEventListener("block-click", handleBlockClick);
+}
+
+//old block click listener binder
+//if (typeof window !== "undefined" && !(window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered) {
+//  window.addEventListener("block-click", handleBlockClick);
+//  (window as Window & { blockClickListenerRegistered?: boolean }).blockClickListenerRegistered = true;
+//}
 
 // -----------------------------------------------------------------------------
 // On-chain override reads (EntityObjectType) via multicall, then terrain fallback
@@ -272,15 +285,21 @@ export class ExploreCommand implements CommandHandler {
   // Accept varargs so we can parse [direction?] [action?]
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
     try {
-      // Parse optional direction + optional action (action last, default "mine")
-      let direction: string | undefined;
-      if (args[0] && isDir(args[0])) {
-        direction = normDir(args[0]);
-        if (args[1] && ACTIONS.has(args[1].toLowerCase())) setCurrentAction(args[1]);
-      } else if (args[0] && ACTIONS.has(args[0].toLowerCase())) {
-        setCurrentAction(args[0]);
+
+      // Order-agnostic parse: [direction?] [action?] in any order
+      let dirTok: string | undefined;
+      let actionTok: ActionName | undefined;
+
+      for (const tok of args) {
+        const lower = tok.toLowerCase();
+        if (!dirTok && isDir(lower)) dirTok = normDir(lower);             // first direction wins
+        if (ACTIONS.has(lower)) actionTok = lower as ActionName;          // last action wins
       }
-      // (No args) keeps currentAction as-is ("mine" by default)
+
+      if (actionTok) setCurrentAction(actionTok);
+      const direction = dirTok; // may be undefined → 3×3 grid mode
+
+
 
       const entityId = encodePlayerEntityId(context.address);
 

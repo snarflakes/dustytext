@@ -297,6 +297,22 @@ export class MoveCommand implements CommandHandler {
           return;
         }
         
+        // Check for solid block error
+        if (errorMessage.includes('Cannot move through solid block') ||
+            errorMessage.includes('43616e6e6f74206d6f7665207468726f75676820736f6c696420626c6f636b00')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ Cannot move through solid blocks. Try moving around or mining the obstruction first.` 
+          }));
+          
+          // Auto-execute explore command
+          const { getCommand } = await import('./registry');
+          const exploreCommand = getCommand('explore');
+          if (exploreCommand) {
+            await exploreCommand.execute(context);
+          }
+          return;
+        }
+        
         // Generic error message
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `❌ Move failed: ${error}` 

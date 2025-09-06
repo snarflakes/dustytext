@@ -166,10 +166,13 @@ export class TillCommand implements CommandHandler {
               "❌ This land has already been tilled or cannot be tilled. Try dirt or grass that hasn't been tilled yet.",
           })
         );
-      } else if (errorMessage.includes("Must equip a hoe")) {
+      } else if (
+        errorMessage.includes("Must equip a hoe") ||
+        errorMessage.includes("4d757374206571756970206120686f6500000000000000000000000000000000")
+      ) {
         window.dispatchEvent(
           new CustomEvent("worker-log", {
-            detail: "❌ You must equip a hoe to till ground.",
+            detail: "❌ You must equip a hoe to till ground. Your hoe may have broken - check your inventory.",
           })
         );
       } else {
@@ -182,3 +185,4 @@ export class TillCommand implements CommandHandler {
     }
   }
 }
+

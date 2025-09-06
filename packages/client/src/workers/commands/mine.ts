@@ -195,13 +195,13 @@ export class MineCommand implements CommandHandler {
         }));
 
         // Auto-look after mining
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const { getCommand } = await import('./registry');
-        const lookCommand = getCommand('look');
-        if (lookCommand) {
-          await lookCommand.execute(context);
-        }
-        return;
+        // await new Promise(resolve => setTimeout(resolve, 1000));
+        // const { getCommand } = await import('./registry');
+        // const lookCommand = getCommand('look');
+        // if (lookCommand) {
+        //  await lookCommand.execute(context);
+        //}
+        //return;
         
       } catch (error) {
         const errorMessage = String(error);

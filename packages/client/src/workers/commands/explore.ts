@@ -271,8 +271,8 @@ async function displayName(t: number | undefined, pos?: Vec3): Promise<string> {
 }
 
 // ---- Put this near the top of explore.ts (above the class) ----
-const ACTIONS = new Set(["mine","water","build","fill","till"]);
-export type ActionName = "mine" | "water" | "build" | "fill" | "till";
+const ACTIONS = new Set(["mine","water","build","fill","till","plant"]);
+export type ActionName = "mine" | "water" | "build" | "fill" | "till" | "plant";
 
 let currentAction: ActionName = "mine";
 export function setCurrentAction(a: string) {

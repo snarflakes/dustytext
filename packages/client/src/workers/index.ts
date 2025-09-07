@@ -100,7 +100,7 @@ async function runWorkerCommand(command: string): Promise<void> {
   }
 
 
-  const NON_CLEARING = new Set(["done","mine","water","build","fill","till","move","look","health","ai","aiauto","ai_auto","explore","exp"]);
+  const NON_CLEARING = new Set(["done","mine","water","build","fill","till","move","look","health","ai","aiauto","ai_auto","explore","exp","plant"]);
   if (!NON_CLEARING.has(commandName)) {
     try {
       const mod = await import("../commandQueue"); // use unified clear

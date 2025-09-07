@@ -351,6 +351,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'build' || command.startsWith('build ')) {
       runCommand(command.trim());
+    } else if (command === 'plant' || command.startsWith('plant ')) {
+      runCommand(command.trim());
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

@@ -11,7 +11,7 @@ import {
 const delay = (ms: number) => new Promise<void>(res => setTimeout(res, ms));
 
 // Tune execution order to your pipeline
-const ACTION_ORDER: string[] = ["fill", "water", "build", "till", "mine"];
+const ACTION_ORDER: string[] = ["till", "fill", "water", "build", "plant", "mine"];
 
 export class DoneCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {

@@ -1,3 +1,4 @@
+
 import { CommandHandler, CommandContext } from './types';
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
@@ -178,6 +179,24 @@ export class EquipCommand implements CommandHandler {
     }
   }
 }
+
+// Add export function to get currently equipped tool
+export function getEquippedTool(): EquippedTool | null {
+  return (globalThis as typeof globalThis & { equippedTool: EquippedTool | null }).equippedTool || null;
+}
+
+// Add export function to check if a tool is equipped
+export function isToolEquipped(): boolean {
+  const tool = getEquippedTool();
+  return tool !== null;
+}
+
+// Add export function to get equipped tool name/type
+export function getEquippedToolName(): string | null {
+  const tool = getEquippedTool();
+  return tool ? tool.type : null;
+}
+
 
 
 

@@ -12,6 +12,7 @@ import { isSetupActive as isInRegisterAISetup } from './workers/commands/registe
 import { getAIConfig } from "./workers/commands/registerAI";
 import { setAIActive } from "./workers/ai/runtime";
 import { appendAILog } from "./workers/ai/runtime";
+import { getEquippedToolName } from "./workers/commands/equip";
 
 declare global {
   interface Window {
@@ -43,6 +44,7 @@ declare global {
 export function App() {
   const livingPlayers = useLivingPlayersCount();
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
+  const [equippedTool, setEquippedTool] = useState<string | null>(null);
 
   const [log, setLog] = useState<string[]>([
     "<i>Welcome to Dusty Text</i>",
@@ -254,6 +256,30 @@ export function App() {
     };
   }, [sessionClient, isConnected]);
 
+  // Update equipped tool when equip/unequip commands are executed
+  useEffect(() => {
+    const updateEquippedTool = () => {
+      const toolName = getEquippedToolName();
+      setEquippedTool(toolName);
+    };
+
+    const onWorkerLog = (e: Event) => {
+      const ce = e as CustomEvent<string>;
+      const line = String(ce.detail ?? "");
+      
+      // Update equipped tool when we see equip/unequip messages
+      if (line.includes("⚒️ Equipped") || line.includes("⚒️ Unequipped")) {
+        updateEquippedTool();
+      }
+    };
+
+    // Initial check
+    updateEquippedTool();
+
+    window.addEventListener("worker-log", onWorkerLog as EventListener);
+    return () => window.removeEventListener("worker-log", onWorkerLog as EventListener);
+  }, []);
+
   const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
     const raw = input.trim();
@@ -447,6 +473,9 @@ export function App() {
             />
           </div>
           <div className="flex items-center gap-4">
+            <div className="text-sm">
+              🤚 {equippedTool || 'None'}
+            </div>
             {healthStatus && healthStatus.isAlive && (
               <div className="text-sm">
                 ❤️ {healthStatus.lifePercentage.toFixed(1)}%
@@ -460,6 +489,7 @@ export function App() {
             {livingPlayers !== null &&(
              <div className="text-sm">👥 {livingPlayers} players alive</div>
           )}
+            
             {isConnected && balanceData && (
               <div className="text-sm">
                 💰 {parseFloat(formatUnits(balanceData.value, 18)).toFixed(5)} ETH

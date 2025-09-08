@@ -188,13 +188,19 @@ button[data-testid*="connect"]:hover {
 
 /* Clickable block styling */
 .clickable-block {
-  text-decoration: underline !important;
-  font-weight: bold !important;
-  cursor: pointer !important;
-  color: #3b82f6 !important;
-  transition: color 0.2s ease !important;
-  padding: 1px 2px !important;
-  border-radius: 2px !important;
+  text-decoration: underline;
+  font-weight: bold;
+  cursor: pointer;
+  color: #3b82f6;
+  transition: color 0.2s ease;
+  padding: 1px 2px;
+  border-radius: 2px;
+}
+
+.clickable-block.air-block {
+  text-decoration: none;
+  color: white;
+  font-weight: normal;
 }
 
 .clickable-block:hover {
@@ -302,6 +308,7 @@ button[data-testid*="connect"]:hover {
     padding: 0 10px;
   }
 }
+
 
 
 

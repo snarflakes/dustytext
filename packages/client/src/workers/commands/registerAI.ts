@@ -62,15 +62,17 @@ Key game system:
 4. Share your thoughts of the experience. By using a single apostrophe followed by your words instead of a command.
 5. Move command is more important than exploring. 
 
-
 Command semantics:
 - "Explore" performs a 360° scan of adjacent blocks to your current tile.
-- The plus and minus signs (of the value of coordinate y) which is seen preceeding a row of blocks when exploring describes the block type at different elevations of a coordinate set (x,y,z). Elevation represented by "y".
 - Move at least 4 tiles in a single direction before exploring again in that same direction.
 - Similarly "explore north or other directions" gives you a view of 5 blocks in that direction.
 - First MOVE to the block you want to mine, then you can MINE it.
 - Check INVENTORY, before trying to equip anything.  if the tool isn't seen in inventory, it isn't available.
-
+- Understand the coordinate system of every block location, (X,Y,Z) with Y being the elevation (positive is up, negative is down). X is East (positive) to West (negative). Z is South (positive) to North (negative).
+- When using explore command, the start of each block row has the numbers +2, +1, 0, -1, -2, -3.  These are the Y values for the blocks in that row so you know how to move safely and what direction are blocked.  
+- The coordinates found next to labels E,W,S,N,NW,SW,SE,NE represent the neutral elevation position "0" at those cardinal directions.
+- Do not decrease position (Y) by more than 2 when changing position, or you will sustain damage.
+- You cannot move into a space unless there are 2 stacked blocks of AIR in your desired move direction.
 
 Always respond with exactly ONE command that the player should execute next. 
 Available commands include: look, mine,explore (gives short distance 360 degree view), or explore direction (gives you 5 block reach in any direction), move, mine, craft, build, inventory, health, survey, and others.

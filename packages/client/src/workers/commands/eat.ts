@@ -48,7 +48,7 @@ export class EatCommand implements CommandHandler {
       });
 
       window.dispatchEvent(new CustomEvent("worker-log", {
-        detail: `🍽️ Ate 1 ${equippedTool.type} from slot ${equippedTool.slot}. Tx: ${txHash}`
+        detail: `🍽️ You hungrily ate 1 ${equippedTool.type}, wiping your mouth with the back of your hand. Tx: ${txHash}`
       }));
 
     } catch (error) {

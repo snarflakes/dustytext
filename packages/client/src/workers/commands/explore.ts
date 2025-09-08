@@ -94,12 +94,13 @@ interface SelectableBlock {
 //let isSelectionMode = false;
 
 function createClickableBlock(block: SelectableBlock): string {
-  if (block.name === "Air" || block.name === "Empty") return cell(block.name);
+  if (block.name === "Empty") return cell(block.name);
   const blockId = `block-${block.x}-${block.y}-${block.z}`;
-  const link = `<span class="clickable-block"
+  const isAir = block.name.toLowerCase() === "air";
+  const airClass = isAir ? " air-block" : "";
+  const link = `<span class="clickable-block${airClass}"
       data-block='${JSON.stringify(block)}'
       data-id="${blockId}"
-      style="text-decoration: underline; cursor: pointer; color: #3b82f6;"
     >${block.name}</span>`;
   return cell(link);
 }
@@ -512,6 +513,7 @@ export class ExploreCommand implements CommandHandler {
 //  clearUnified();     // clears unified queue + releases owner/pause
 //  isSelectionMode = false;
 //}
+
 
 
 

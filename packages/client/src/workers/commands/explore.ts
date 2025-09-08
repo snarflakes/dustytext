@@ -350,7 +350,7 @@ export class ExploreCommand implements CommandHandler {
         }
       }
 
-      const layers = [2, 1, 0, -1, -2];
+      const layers = [2, 1, 0, -1, -2, -3];
 
       if (direction) {
         const valid = ["north","n","east","e","south","s","west","w","northeast","ne","northwest","nw","southeast","se","southwest","sw","up","u","down","d"];

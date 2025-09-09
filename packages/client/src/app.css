@@ -309,6 +309,41 @@ button[data-testid*="connect"]:hover {
   }
 }
 
+/* grown wheat glow */
+.clickable-block.grown {
+  position: relative;
+  text-shadow:
+    0 0 2px rgba(255,215,0,.4),
+    0 0 6px rgba(255,215,0,.6),
+    0 0 12px rgba(255,215,0,.5);
+  animation: pulse-glow 1.25s ease-in-out infinite alternate;
+}
+.clickable-block.grown::after {
+  content: "✦";
+  position: absolute;
+  top: -0.5em;
+  right: -0.6em;
+  opacity: .9;
+  filter: drop-shadow(0 0 6px rgba(255,215,0,.9));
+  animation: twinkle 1.2s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+@keyframes pulse-glow {
+  from { text-shadow:
+    0 0 1px rgba(255,215,0,.3),
+    0 0 4px rgba(255,215,0,.35),
+    0 0 8px rgba(255,215,0,.25);
+  }
+  to { text-shadow:
+    0 0 4px rgba(255,215,0,.9),
+    0 0 14px rgba(255,215,0,.7),
+    0 0 28px rgba(255,215,0,.6);
+  }
+}
+@keyframes twinkle {
+  0%,100% { transform: scale(.9) rotate(0deg); opacity: .8; }
+  50%     { transform: scale(1.15) rotate(20deg); opacity: 1; }
+}
 
 
 

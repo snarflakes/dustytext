@@ -94,14 +94,27 @@ interface SelectableBlock {
 //let isSelectionMode = false;
 
 function createClickableBlock(block: SelectableBlock): string {
+  // "Empty" stays plain
   if (block.name === "Empty") return cell(block.name);
+
   const blockId = `block-${block.x}-${block.y}-${block.z}`;
   const isAir = block.name.toLowerCase() === "air";
-  const airClass = isAir ? " air-block" : "";
-  const link = `<span class="clickable-block${airClass}"
+  const isGrownWheat = block.name.includes("WheatSeed(G)");
+
+  // AIR: non-clickable, white, no underline (inline style beats any inherited green)
+  if (isAir) {
+    const span = `<span class="air-block" data-id="${blockId}" style="color:#fff;text-decoration:none;">${block.name}</span>`;
+    return cell(span);
+  }
+
+  // Clickable everything else; glow if grown
+  const cls = `clickable-block${isGrownWheat ? " grown" : ""}`;
+  const link = `<span class="${cls}"
       data-block='${JSON.stringify(block)}'
       data-id="${blockId}"
+      style="text-decoration: underline; cursor: pointer; color: #3b82f6;"
     >${block.name}</span>`;
+
   return cell(link);
 }
 

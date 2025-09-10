@@ -101,18 +101,14 @@ function createClickableBlock(block: SelectableBlock): string {
   const isAir = block.name.toLowerCase() === "air";
   const isGrownWheat = block.name.includes("WheatSeed(G)");
 
-  // AIR: non-clickable, white, no underline (inline style beats any inherited green)
-  if (isAir) {
-    const span = `<span class="air-block" data-id="${blockId}" style="color:#fff;text-decoration:none;">${block.name}</span>`;
-    return cell(span);
-  }
+  // Build class string
+  const airClass = isAir ? " air-block" : "";
+  const grownClass = isGrownWheat ? " grown" : "";
+  const cls = `clickable-block${airClass}${grownClass}`;
 
-  // Clickable everything else; glow if grown
-  const cls = `clickable-block${isGrownWheat ? " grown" : ""}`;
   const link = `<span class="${cls}"
       data-block='${JSON.stringify(block)}'
       data-id="${blockId}"
-      style="text-decoration: underline; cursor: pointer; color: #3b82f6;"
     >${block.name}</span>`;
 
   return cell(link);

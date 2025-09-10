@@ -15,6 +15,7 @@ const OBJECT_TYPES: Record<number, string> = {
   83: "SwitchGrass",
   84: "VinesBush",
   86: "HempBush",
+  149: "Workbench",
   127: "DarkOakPlanks",
   134: "WheatSeed",
   32774: "WoodenAxe",

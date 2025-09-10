@@ -157,18 +157,22 @@ export const recipes: Recipe[] = [
     outputs: [["Bed", 1]],
   },
   {
+    station: "Workbench",
     inputs: [["AnyPlank", 5]],
     outputs: [["WoodenPick", 1]],
   },
   {
+    station: "Workbench",
     inputs: [["AnyPlank", 5]],
     outputs: [["WoodenAxe", 1]],
   },
   {
+    station: "Workbench",
     inputs: [["AnyPlank", 8]],
     outputs: [["WoodenWhacker", 1]],
   },
   {
+    station: "Workbench",
     inputs: [["AnyPlank", 4]],
     outputs: [["WoodenHoe", 1]],
   },

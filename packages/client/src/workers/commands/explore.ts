@@ -327,15 +327,25 @@ export class ExploreCommand implements CommandHandler {
 
       const entityId = encodePlayerEntityId(context.address);
 
-      // Position (indexer)
-      const posQuery = `SELECT "x","y","z" FROM "${POSITION_TABLE}" WHERE "entityId"='${entityId}'`;
-      const posRes = await fetch(INDEXER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
-      });
-      const posJson = await posRes.json();
-      const posRows = posJson?.result?.[0];
+      // Position (indexer) with retry for lag
+      let posRows;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const posQuery = `SELECT "x","y","z" FROM "${POSITION_TABLE}" WHERE "entityId"='${entityId}'`;
+        const posRes = await fetch(INDEXER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
+        });
+        const posJson = await posRes.json();
+        posRows = posJson?.result?.[0];
+        
+        if (Array.isArray(posRows) && posRows.length >= 2) break;
+        
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
       if (!Array.isArray(posRows) || posRows.length < 2) throw new Error("No position found for player. Try 'spawn' first.");
       const [posCols, posVals] = posRows;
       const posObj = Object.fromEntries(posCols.map((k: string, i: number) => [k, posVals[i]]));

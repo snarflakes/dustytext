@@ -23,7 +23,7 @@ export class HelpCommand implements CommandHandler {
       '       [Plant] plant seeds on farmland at your feet with equipped seeds,',
       '       [Build] place equipped block above your head,',
       '       [Mine] down harvest the block beneath you,',
-      '       [Craft] create new items from your inventory,',
+      '       [Craft] create new items from your inventory, workbench must be placed one block north when required for crafting items,',
       '       [Equip] use a tool from your inventory. Try using axe for wood, and a pick for seed harvesting,',
       '       [Unequip] stop using your current tool, they break with use!,',
       '       [Eat] first equip the food, then eat food to restore health,',

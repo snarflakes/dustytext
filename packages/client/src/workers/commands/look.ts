@@ -152,26 +152,39 @@ export class LookCommand implements CommandHandler {
       const entityId = encodePlayerEntityId(context.address);
       console.log('LookCommand: Starting with entityId:', entityId);
 
-      // Get position
-      const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
-      console.log('LookCommand: Fetching position with query:', posQuery);
-      
-      const posRes = await fetch(INDEXER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
-      });
+      // Get position with retry for indexer lag
+      let posRows;
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        const posQuery = `SELECT "x", "y", "z" FROM "${POSITION_TABLE}" WHERE "entityId" = '${entityId}'`;
+        console.log('LookCommand: Fetching position with query:', posQuery);
+        
+        const posRes = await fetch(INDEXER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
+        });
 
-      console.log('LookCommand: Position response status:', posRes.status);
-      
-      if (!posRes.ok) {
-        throw new Error(`Position fetch failed: ${posRes.status} ${posRes.statusText}`);
+        console.log('LookCommand: Position response status:', posRes.status);
+        
+        if (!posRes.ok) {
+          if (attempt < 3) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+          throw new Error(`Position fetch failed: ${posRes.status} ${posRes.statusText}`);
+        }
+
+        const posJson = await posRes.json();
+        console.log('LookCommand: Position JSON:', posJson);
+        
+        posRows = posJson?.result?.[0];
+        if (Array.isArray(posRows) && posRows.length >= 2) break;
+        
+        if (attempt < 3) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
       }
-
-      const posJson = await posRes.json();
-      console.log('LookCommand: Position JSON:', posJson);
       
-      const posRows = posJson?.result?.[0];
       if (!Array.isArray(posRows) || posRows.length < 2) {
         throw new Error("You float amongst the stars. A sprite, a spark brimming with potential. Try 'spawn' first.");
       }

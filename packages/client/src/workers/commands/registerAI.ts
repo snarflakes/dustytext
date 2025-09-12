@@ -1,3 +1,4 @@
+// registerai.ts
 import { CommandHandler, CommandContext } from './types';
 import { setAIRuntimeConfig, getAIClient } from "../ai/runtime";
 
@@ -9,6 +10,15 @@ function sanitizeApiKey(raw: string): string {
     .trim();
 }
 
+// --- session-only remember (per-tab) ---
+const SESSION_KEY = "dustytext_user_api_key";
+function rememberKeyInThisTab(k: string) { sessionStorage.setItem(SESSION_KEY, k); }
+function restoreKeyFromThisTab(): string | null { return sessionStorage.getItem(SESSION_KEY); }
+function forgetKeyInThisTab() { sessionStorage.removeItem(SESSION_KEY); }
+
+function maskKey(key: string): string {
+  return (key || "").replace(/^(.{6}).+(.{4})$/, "$1…$2");
+}
 
 export interface AIConfig {
   provider: 'OpenAI' | 'Azure OpenAI' | 'OpenRouter' | 'Custom';
@@ -17,9 +27,8 @@ export interface AIConfig {
   temperature: number;
   maxTokens: number;
   systemPrompt: string;
-  rememberSettings: boolean;
+  rememberSettings: boolean; // repurposed to mean "remember in this tab" (sessionStorage)
   allowedCommands?: string[];
-
 
   // Azure OpenAI specific
   endpoint?: string;
@@ -121,7 +130,6 @@ STRICT OUTPUT RULES:
 - \`mine\` MUST be bare (no arguments).
 - If you cannot produce a valid command, output a \`move <direction>\` instead.
 
-
 Allowed commands:
 ${shown.join(", ")}
 `;
@@ -139,6 +147,7 @@ export class RegisterAICommand implements CommandHandler {
     if (subCommand === 'clear') {
       aiConfig = null;
       setupState = { step: 0, config: {}, isActive: false };
+      forgetKeyInThisTab();
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: "🤖 AI configuration cleared" 
       }));
@@ -179,7 +188,7 @@ export class RegisterAICommand implements CommandHandler {
       `  Max Tokens: ${aiConfig.maxTokens}`,
       `  Rate Limit: ${aiConfig.rateLimit || 1000}ms`,
       `  Debug Logging: ${aiConfig.debugLogging ? 'Yes' : 'No'}`,
-      `  Remember Settings: ${aiConfig.rememberSettings ? 'Yes' : 'No'}`,
+      `  Remember in this tab: ${aiConfig.rememberSettings ? 'Yes' : 'No'}`,
     ];
     
     if (aiConfig.provider === 'Azure OpenAI') {
@@ -244,7 +253,7 @@ export class RegisterAICommand implements CommandHandler {
       case 9: // Debug logging
         this.handleDebugLogging(trimmed);
         break;
-      case 10: // Remember settings
+      case 10: // Remember settings (session-only)
         this.handleRememberSettings(trimmed);
         break;
       case 11: // System prompt
@@ -254,24 +263,12 @@ export class RegisterAICommand implements CommandHandler {
   }
 
   private showStep1(): void {
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 1/11: Select AI Provider" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "1. OpenAI (standard GPT models)" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "2. Azure OpenAI (enterprise deployment)" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "3. OpenRouter (access to multiple models)" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "4. Custom (local LM Studio, etc.)" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter choice (1-4):" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 1/11: Select AI Provider" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "1. OpenAI (standard GPT models)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "2. Azure OpenAI (enterprise deployment)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "3. OpenRouter (access to multiple models)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "4. Custom (local LM Studio, etc.)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter choice (1-4):" }));
   }
 
   private handleProviderSelection(input: string): void {
@@ -293,13 +290,14 @@ export class RegisterAICommand implements CommandHandler {
     window.dispatchEvent(new CustomEvent("worker-log", { 
       detail: `Step 2/11: API Key for ${setupState.config.provider}` 
     }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter your API key:" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter your API key:" }));
     
     if (setupState.config.provider === 'OpenAI') {
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: "💡 Get your key at: https://platform.openai.com/api-keys" 
+      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "🔐 Your key stays in this tab and never hits our servers." 
       }));
     }
   }
@@ -326,12 +324,10 @@ export class RegisterAICommand implements CommandHandler {
     setupState.config.apiKey = key;
     setupState.step = 3;
     this.showStep3();
- }
+  }
 
   private showStep3(): void {
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 3/11: Model Selection" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 3/11: Model Selection" }));
     
     const suggestions = {
       'OpenAI': 'gpt-4.1-mini, o4-mini, gpt-4o, gpt-3.5-turbo',
@@ -343,9 +339,7 @@ export class RegisterAICommand implements CommandHandler {
     window.dispatchEvent(new CustomEvent("worker-log", { 
       detail: `Suggested models: ${suggestions[setupState.config.provider!]}` 
     }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter model name:" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter model name:" }));
   }
 
   private handleModel(input: string): void {
@@ -362,15 +356,11 @@ export class RegisterAICommand implements CommandHandler {
   }
 
   private showStep4(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 4/11: Temperature (creativity level)" }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 4/11: Temperature (creativity level)" 
+      detail: "0.0 = deterministic, 1.0 = very creative (default: 0.3). Note: o*-models (o1/o3/o4) ignore temperature." 
     }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "0.0 = deterministic, 1.0 = very creative (default: 0.3)" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter temperature (0-1):" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter temperature (0-1):" }));
   }
 
   private handleTemperature(input: string): void {
@@ -388,15 +378,11 @@ export class RegisterAICommand implements CommandHandler {
   }
 
   private showStep5(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 5/11: Max Tokens per Response" }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 5/11: Max Tokens per Response" 
+      detail: "32-64 recommended for single commands (default: 50). For long thinking models (o4 family), larger limits may be needed." 
     }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "32-64 recommended for single commands (default: 50) for o4 models 1500 needed" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter max tokens:" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter max tokens:" }));
   }
 
   private handleMaxTokens(input: string): void {
@@ -424,20 +410,12 @@ export class RegisterAICommand implements CommandHandler {
     const provider = setupState.config.provider!;
     
     if (provider === 'Azure OpenAI') {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "Step 6/11: Azure OpenAI Configuration" 
-      }));
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "Enter endpoint URL: [https://your-resource.openai.azure.com/]" 
-      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 6/11: Azure OpenAI Configuration" }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter endpoint URL: [https://your-resource.openai.azure.com/]" }));
     } else if (provider === 'Custom' || provider === 'OpenRouter') {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "Step 6/11: Base URL Configuration" 
-      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 6/11: Base URL Configuration" }));
       const example = provider === 'Custom' ? 'http://localhost:1234/v1' : 'https://openrouter.ai/api/v1';
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `Enter base URL (e.g., ${example}): [url]` 
-      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: `Enter base URL (e.g., ${example}): [url]` }));
     }
   }
 
@@ -447,15 +425,11 @@ export class RegisterAICommand implements CommandHandler {
     if (provider === 'Azure OpenAI') {
       if (!setupState.config.endpoint) {
         setupState.config.endpoint = input;
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "Enter deployment name: [deployment-name]" 
-        }));
+        window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter deployment name: [deployment-name]" }));
         return;
       } else if (!setupState.config.deploymentName) {
         setupState.config.deploymentName = input;
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "Enter API version (e.g., 2024-02-15-preview): [version]" 
-        }));
+        window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter API version (e.g., 2024-02-15-preview): [version]" }));
         return;
       } else {
         setupState.config.apiVersion = input;
@@ -469,15 +443,11 @@ export class RegisterAICommand implements CommandHandler {
   }
 
   private showStep7(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 7/11: Rate Limiting" }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 7/11: Rate Limiting" 
+      detail: "Minimum delay between AI calls in milliseconds (default: 1000). For o4 models, 10000 is recommended." 
     }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Minimum delay between AI calls in milliseconds (default: 1000) for o4 models 10000 recommended" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter rate limit: [milliseconds]" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter rate limit: [milliseconds]" }));
   }
 
   private handleRateLimit(input: string): void {
@@ -495,15 +465,9 @@ export class RegisterAICommand implements CommandHandler {
   }
 
   private showStep8(): void {
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 8/11: Retry Policy" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Number of retries on failure (default: 2)" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter retry count: [number]" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 8/11: Retry Policy" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Number of retries on failure (default: 2)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter retry count: [number]" }));
   }
 
   private handleRetryPolicy(input: string): void {
@@ -521,23 +485,15 @@ export class RegisterAICommand implements CommandHandler {
   }
 
   private showStep9(): void {
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 9/11: Debug Logging" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Log AI prompts and responses to console for debugging?" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter y/n: [y/n]" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 9/11: Debug Logging" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Log AI prompts and responses to console for debugging?" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter y/n: [y/n]" }));
   }
 
   private handleDebugLogging(input: string): void {
     const choice = input.toLowerCase();
     if (choice !== 'y' && choice !== 'n' && choice !== 'yes' && choice !== 'no') {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❌ Enter 'y' for yes or 'n' for no: [y/n]" 
-      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: "❌ Enter 'y' for yes or 'n' for no: [y/n]" }));
       return;
     }
     
@@ -547,41 +503,28 @@ export class RegisterAICommand implements CommandHandler {
   }
 
   private showStep10(): void {
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 10/11: Remember Settings" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Save configuration to browser localStorage?" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter y/n: [y/n]" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 10/11: Remember in this tab (session-only)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Keep your API key for reloads in THIS tab only? (stored in sessionStorage)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter y/n: [y/n]" }));
   }
 
   private handleRememberSettings(input: string): void {
     const choice = input.toLowerCase();
     if (choice !== 'y' && choice !== 'n' && choice !== 'yes' && choice !== 'no') {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "❌ Enter 'y' for yes or 'n' for no: [y/n]" 
-      }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: "❌ Enter 'y' for yes or 'n' for no: [y/n]" }));
       return;
     }
     
+    // Reuse rememberSettings to mean "remember in this tab"
     setupState.config.rememberSettings = choice === 'y' || choice === 'yes';
     setupState.step = 11;
     this.showStep11();
   }
 
   private showStep11(): void {
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Step 11/11: System Prompt" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Use default survival strategy prompt? (recommended)" 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Enter y for default, or n to enter custom: [y/n]" 
-    }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 11/11: System Prompt" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Use default survival strategy prompt? (recommended)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter y for default, or n to enter custom: [y/n]" }));
   }
 
   private handleSystemPrompt(input: string): void {
@@ -625,18 +568,18 @@ export class RegisterAICommand implements CommandHandler {
     config.debugLogging = config.debugLogging || false;
     config.rememberSettings = config.rememberSettings || false;
 
-    // Log all configuration values to console for debugging
+    // Log configuration (mask apiKey)
+    const masked = maskKey(config.apiKey);
     console.log('=== AI Configuration Debug ===');
     console.log('provider:', config.provider, '(type:', typeof config.provider, ')');
-    console.log('apiKey:', config.apiKey, '(type:', typeof config.apiKey, ')');
+    console.log('apiKey:', masked, '(type:', typeof config.apiKey, ')');
     console.log('model:', config.model, '(type:', typeof config.model, ')');
     console.log('temperature:', config.temperature, '(type:', typeof config.temperature, ')');
     console.log('maxTokens:', config.maxTokens, '(type:', typeof config.maxTokens, ')');
-    console.log('systemPrompt:', config.systemPrompt, '(type:', typeof config.systemPrompt, ')');
     console.log('rateLimit:', config.rateLimit, '(type:', typeof config.rateLimit, ')');
     console.log('retryPolicy:', config.retryPolicy, '(type:', typeof config.retryPolicy, ')');
     console.log('debugLogging:', config.debugLogging, '(type:', typeof config.debugLogging, ')');
-    console.log('rememberSettings:', config.rememberSettings, '(type:', typeof config.rememberSettings, ')');
+    console.log('rememberInThisTab:', config.rememberSettings, '(type:', typeof config.rememberSettings, ')');
     
     if (config.provider === 'Azure OpenAI') {
       console.log('endpoint:', config.endpoint, '(type:', typeof config.endpoint, ')');
@@ -647,12 +590,20 @@ export class RegisterAICommand implements CommandHandler {
     if (config.provider === 'Custom' || config.provider === 'OpenRouter') {
       console.log('baseUrl:', config.baseUrl, '(type:', typeof config.baseUrl, ')');
     }
-    
-    console.log('Full config object:', JSON.stringify(config, null, 2));
+
+    const { apiKey: _secret, ...safe } = config;
+    console.log('Full config (apiKey masked):', { ...safe, apiKey: masked });
     console.log('=== End AI Configuration Debug ===');
 
-    // Save configuration
+    // Save configuration (without persisting key)
     setAIConfig(config);
+    
+    // Session-only remember
+    if (config.rememberSettings && config.apiKey) {
+      rememberKeyInThisTab(config.apiKey);
+    } else {
+      forgetKeyInThisTab();
+    }
     
     // 🔌 Prime runtime + test connection (fire-and-forget so completeSetup stays sync)
     setAIRuntimeConfig(config);
@@ -671,29 +622,17 @@ export class RegisterAICommand implements CommandHandler {
       }
     })();
 
-
     // Reset setup state
     setupState = { step: 0, config: {}, isActive: false };
     
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "✅ AI configuration completed successfully!" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: `🤖 ${config.provider} configured with model ${config.model}` }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Use 'registerai status' to view settings." }));
     window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "✅ AI configuration completed successfully!" 
+      detail: config.rememberSettings
+        ? "💾 Key remembered for THIS tab (sessionStorage). Non-key settings saved."
+        : "🗝️ BYOK not remembered. You’ll re-enter it next time."
     }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: `🤖 ${config.provider} configured with model ${config.model}` 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "Use 'registerai status' to view settings." 
-    }));
-    window.dispatchEvent(new CustomEvent("worker-log", { 
-      detail: "🔍 Check browser console for detailed configuration debug info." 
-    }));
-    
-    if (config.rememberSettings) {
-      window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: "💾 Settings saved to browser localStorage." 
-      }));
-    }
-    
   }
 }
 
@@ -705,10 +644,12 @@ export function getAIConfig(): AIConfig | null {
 export function setAIConfig(config: AIConfig): void {
   config.apiKey = sanitizeApiKey(config.apiKey);
   aiConfig = config;
-  
+
+  // Persist non-secret settings only
   if (config.rememberSettings) {
+    const { apiKey: _secret, ...rest } = config;
     try {
-      localStorage.setItem('dustytext-ai-config', JSON.stringify(config));
+      localStorage.setItem('dustytext-ai-config', JSON.stringify(rest));
     } catch (error) {
       console.warn('Failed to save AI config to localStorage:', error);
     }
@@ -719,9 +660,13 @@ export function loadAIConfigFromStorage(): void {
   try {
     const stored = localStorage.getItem('dustytext-ai-config');
     if (stored) {
-      const cfg = JSON.parse(stored) as AIConfig;
-      if (cfg?.apiKey) cfg.apiKey = sanitizeApiKey(cfg.apiKey);
-      aiConfig = cfg;
+      const cfg = JSON.parse(stored) as Omit<AIConfig, "apiKey">;
+      // restore non-secret settings; apiKey left empty (user or session must provide)
+      aiConfig = { ...cfg, apiKey: "" } as AIConfig;
+
+      // Try restoring key for this tab if present
+      const k = restoreKeyFromThisTab();
+      if (k && aiConfig) aiConfig.apiKey = sanitizeApiKey(k);
     }  
   } catch (error) {
     console.warn('Failed to load AI config from localStorage:', error);
@@ -734,10 +679,3 @@ export function isSetupActive(): boolean {
 
 // Initialize from localStorage on module load
 loadAIConfigFromStorage();
-
-
-
-
-
-
-

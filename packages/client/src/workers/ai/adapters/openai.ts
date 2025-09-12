@@ -3,6 +3,7 @@ import type { AIClient } from "../client";
 import type { AIConfig } from "../../commands/registerAI";
 
 // ---------- helpers ----------
+const mask = (k: string) => (k || "").replace(/^(.{6}).+(.{4})$/, "$1…$2");
 type Role = "system" | "user" | "assistant";
 type Message = { role: Role; content: string };
 
@@ -128,9 +129,7 @@ function extractText(data: unknown): string {
 }
 // --------------------------------
 
-// Narrow import.meta typing without `any`
-type MetaWithEnv = ImportMeta & { env?: { PROD?: boolean } };
-const isProd = Boolean((import.meta as MetaWithEnv).env?.PROD);
+// (No env branching needed for BYOK direct-to-provider)
 
 
 // ---- Snapshot helpers (type-safe view of the state we pass to the LLM) ----
@@ -167,19 +166,27 @@ function asSnapshot(u: unknown): Snapshot {
 }
 
 export const clientOpenAI = (cfg: AIConfig): AIClient => {
-  // In prod, call your serverless proxy. In dev, call OpenAI directly.
-  const baseUrl = cfg.baseUrl ?? (isProd ? "/api/ai" : "https://api.openai.com/v1");
+  
+  // BYOK: call provider directly in all envs (unless user supplied baseUrl)
+  const baseUrl = cfg.baseUrl ?? "https://api.openai.com/v1";
 
   async function call(body: unknown): Promise<string> {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
-
-    // Only attach Authorization when calling OpenAI directly from the browser (dev)
-    if (!isProd && baseUrl.includes("api.openai.com")) {
-      headers["Authorization"] = `Bearer ${cfg.apiKey}`;
-    }
+    if (!cfg.apiKey) throw new Error("Missing API key. Run `registerai` to set it.");
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+      // BYOK: user’s key is required for direct browser → OpenAI call
+      "Authorization": `Bearer ${cfg.apiKey}`,
+    };
 
     if (cfg.debugLogging) {
-      console.log("[AI/OpenAI] Request", { url: `${baseUrl}/responses`, body });
+      console.log("[AI/OpenAI] Request", {
+        url: `${baseUrl}/responses`,
+        model: cfg.model,
+        temperature: cfg.temperature,
+        max_output_tokens: cfg.maxTokens,
+        key: mask(cfg.apiKey),         // 👈 masked key
+        body                            // consider trimming if too verbose
+      });
     }
 
     const res = await fetch(`${baseUrl}/responses`, {
@@ -190,7 +197,9 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
 
     if (!res.ok) {
       const text = await res.text();
-      throw new Error(`OpenAI HTTP ${res.status}: ${text}`);
+      if (res.status === 401) throw new Error("OpenAI 401 Unauthorized: bad or missing API key");
+      if (res.status === 429) throw new Error("OpenAI 429 Rate limited: slow down or try a smaller model");
+      throw new Error(`OpenAI HTTP ${res.status}: ${text || res.statusText}`);
     }
 
     const data: unknown = await res.json();

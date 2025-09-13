@@ -371,6 +371,8 @@ export function App() {
       runCommand(`equip ${toolName}`);
     } else if (command === 'unequip') {
       runCommand('unequip');
+    } else if (command === 'hit' || command.startsWith('hit ')) {
+      runCommand(command.trim());
     } else if (command === 'till' || command.startsWith('till ')) {
       runCommand(command.trim());
     } else if (command === 'fill' || command.startsWith('fill ')) {

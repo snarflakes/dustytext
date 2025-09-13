@@ -27,6 +27,7 @@ export class HelpCommand implements CommandHandler {
       '       [Equip] use a tool from your inventory. Try using axe for wood, and a pick for seed harvesting,',
       '       [Unequip] stop using your current tool, they break with use!,',
       '       [Eat] first equip the food, then eat food to restore health,',
+      '       [Hit] other players with or without an equipped tool, also loots a dead player if standing above them,',
       '  [RegisterAI] configure AI assistant settings for AI mode,',
       '  [CustomAI] add custom instructions to future AI prompts, movement directions, personality,',
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',

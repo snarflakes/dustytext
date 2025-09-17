@@ -239,9 +239,17 @@ export function App() {
     
     const updateHealth = async () => {
       console.log('updateHealth called for session address:', sessionAddress);
-      const status = await getHealthStatus(sessionAddress);
-      console.log('Health status received:', status);
-      setHealthStatus(status);
+      try {
+        const status = await getHealthStatus(sessionAddress);
+        console.log('Health status received:', status);
+        // Only update if we got valid data (not a fetch error)
+        if (status.isAlive || status.lifePercentage > 0 || status.energy > 0n) {
+          setHealthStatus(status);
+        }
+      } catch (error) {
+        console.log('Health status fetch failed, keeping previous status:', error);
+        // Don't update healthStatus on error - keep previous value
+      }
     };
     
     // Initial load
@@ -357,6 +365,8 @@ export function App() {
       runCommand('done');
     } else if (command === 'eat') {
       runCommand('eat');
+    } else if (command === 'sense' || command.startsWith('sense ')) {
+      runCommand(command.trim());
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
     } else if (command === 'mine' || command.startsWith('mine ')) {
@@ -371,6 +381,8 @@ export function App() {
       runCommand(`equip ${toolName}`);
     } else if (command === 'unequip') {
       runCommand('unequip');
+    } else if (command === 'hit' || command.startsWith('hit ')) {
+      runCommand(command.trim());
     } else if (command === 'till' || command.startsWith('till ')) {
       runCommand(command.trim());
     } else if (command === 'fill' || command.startsWith('fill ')) {

@@ -57,8 +57,10 @@ async function hitWithOptionalTool(
 }
 
 async function findPlayerAtCoordinate(x: number, y: number, z: number): Promise<string | null> {
-  // Query for any player entity at the given coordinate
+  // Query for any entity at the given coordinate (not just in EntityPosition table)
   const query = `SELECT "entityId" FROM "${POSITION_TABLE}" WHERE "x" = ${x} AND "y" = ${y} AND "z" = ${z}`;
+  
+  console.log(`[hit] Searching for entities at (${x}, ${y}, ${z})`);
   
   const response = await fetch(INDEXER_URL, {
     method: "POST",
@@ -66,20 +68,31 @@ async function findPlayerAtCoordinate(x: number, y: number, z: number): Promise<
     body: JSON.stringify([{ address: WORLD_ADDRESS, query }]),
   });
 
-  if (!response.ok) return null;
+  if (!response.ok) {
+    console.log(`[hit] Query failed: ${response.status}`);
+    return null;
+  }
 
   const result = await response.json();
+  console.log(`[hit] Query result:`, result);
+  
   const rows = result?.result?.[0];
-  if (!Array.isArray(rows) || rows.length < 2) return null;
+  if (!Array.isArray(rows) || rows.length < 2) {
+    console.log(`[hit] No entities found at coordinates`);
+    return null;
+  }
 
-  const [cols, vals] = rows;
-  const entities = vals.map((row: unknown[]) => {
-    const entity = Object.fromEntries(cols.map((k: string, i: number) => [k, row[i]]));
-    return entity.entityId;
+  const [, vals] = rows;
+  const entities = vals.map((row: string) => {
+    return row; // Each row is the entityId string itself
   });
+
+  console.log(`[hit] Found entities:`, entities);
 
   // Find player entities (they start with "01" prefix)
   const playerEntities = entities.filter((entityId: string) => entityId.startsWith('0x01'));
+  
+  console.log(`[hit] Player entities:`, playerEntities);
   
   return playerEntities.length > 0 ? playerEntities[0] : null;
 }
@@ -143,7 +156,7 @@ export class HitCommand implements CommandHandler {
       
       coords = {
         x: Number(pos.x ?? 0),
-        y: Number(pos.y ?? 0) - 1, // Hit at block below feet
+        y: Number(pos.y ?? 0) - 2, // Hit at block below feet
         z: Number(pos.z ?? 0)
       };
     }

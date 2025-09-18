@@ -1,43 +1,12 @@
 
 import { CommandHandler, CommandContext } from './types';
+import { OBJECT_TYPES } from '../../objectTypes';
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
 const INVENTORY_SLOT_TABLE = "InventorySlot";
 
-// Import OBJECT_TYPES from the correct location
-const OBJECT_TYPES: Record<number, string> = {
-  21: "Grass",
-  22: "Dirt",
-  51: "BirchLog",
-  56: "DarkOakLog", 
-  58: "OakLeaf",
-  83: "SwitchGrass",
-  84: "VinesBush",
-  86: "HempBush",
-  149: "Workbench",
-  127: "DarkOakPlanks",
-  134: "WheatSeed",
-  32774: "WoodenAxe",
-  32775: "CopperAxe",
-  32776: "IronAxe",
-  32777: "GoldAxe",
-  32778: "DiamondAxe",
-  32779: "NeptuniumAxe",
-  32768: "WoodenPick",
-  32769: "CopperPick",
-  32770: "IronPick",
-  32771: "GoldPick",
-  32772: "DiamondPick",
-  32773: "NeptuniumPick",
-  32783: "WoodenHoe",
-  32788: "Bucket",
-  32789: "WaterBucket",
-  32790: "WheatSlop",
-  32791: "PumpkinSoup",
-  32792: "MelonSmoothie",
-  // Add more as needed
-};
+// Remove the incomplete OBJECT_TYPES definition from here
 
 function encodePlayerEntityId(address: string): `0x${string}` {
   const prefix = "01";

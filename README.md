@@ -6,7 +6,9 @@
 
 [![COOP mode demo](https://img.youtube.com/vi/AUYvukfKF5I/0.jpg)](https://www.youtube.com/watch?v=AUYvukfKF5I)
 
-** Only deposit small amounts of ETH into the smart contract wallet at a time. There is NO reason to deposit large sums. This is an in-production open source engine, the engine builders receive no compensation. You are responsible for retrieving any lost sums. Also for now don't use your same wallet address you use for DUST with this engine, until testing is done with overlapping game state between the two engines.
+** Only deposit small amounts of ETH into the smart contract wallet at a time. There is NO reason to deposit large sums. This is an in-production open source engine, the engine builders receive no compensation. You are responsible for retrieving any lost sums. 
+
+Start with around $0.50 of ETH Gas for Redstone chain here: <a href="https://www.gas.zip/">www.gas.zip</a>
 
 ### DUST + EntryKit + Quarry + Bundler Architecture Overview
 ** 🔑 Wallets and Session Keys **

@@ -521,6 +521,22 @@ export function App() {
               onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
               title={aiOn ? "🛑 Stop AI" : "🤖 Start AI"}
             />
+            <a 
+              href="https://forcefields.pateldhvani.com/" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ 
+                fontSize: '24px',
+                textDecoration: 'none',
+                cursor: 'pointer',
+                transition: 'opacity 0.2s ease'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '0.8'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+              title="View Force Fields Map"
+            >
+              🌍
+            </a>
             <AccountButton />
           </div>
         </div>

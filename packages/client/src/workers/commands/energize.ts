@@ -1,15 +1,10 @@
 // energize.ts
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { getForceFieldInfoForPlayer, invalidateForceFieldFragment } from "./sense";
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
-
-// World-callable ABI for MachineSystem.energizeMachine
-// (You must call systems through the World.)
-const energizeAbi = parseAbi([
-  "function energizeMachine(bytes32 caller, bytes32 machine, (uint16 slot, uint16 amount)[] slots, bytes extraData)"
-]);
 
 function encodePlayerEntityId(address: string): `0x${string}` {
   const prefix = "01";
@@ -76,7 +71,7 @@ export class EnergizeCommand implements CommandHandler {
       const machineId = info.forceField; // the station's entityId
 
       const data = encodeFunctionData({
-        abi: energizeAbi,
+        abi: IWorldAbi,
         functionName: "energizeMachine",
         args: [
           callerEntityId,

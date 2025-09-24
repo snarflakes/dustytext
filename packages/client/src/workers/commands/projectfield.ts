@@ -1,18 +1,14 @@
 // projectfield.ts
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { resourceToHex } from "@latticexyz/common";
 import { DEFAULT_PROGRAM_NAMESPACE } from "@dust/programs/src/constants";
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 /* ---------------------- World / Indexer ---------------------- */
 const WORLD_ADDRESS  = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const INDEXER_URL    = "https://indexer.mud.redstonechain.com/q";
 const POSITION_TABLE = "EntityPosition";
-
-/* ---------------------- ABI ---------------------- */
-const programAbi = parseAbi([
-  "function attachProgram(bytes32 caller, bytes32 target, bytes32 program, bytes extraData) returns (bytes32)",
-]);
 
 /* ---------------------- ProgramId ---------------------- */
 const FORCEFIELD_PROGRAM_ID = resourceToHex({
@@ -102,7 +98,7 @@ export class ProjectFieldCommand implements CommandHandler {
       const machineOrBlockEntityId = encodeBlock(target);
 
       const data = encodeFunctionData({
-        abi: programAbi,
+        abi: IWorldAbi,
         functionName: "attachProgram",
         args: [caller, machineOrBlockEntityId, FORCEFIELD_PROGRAM_ID, "0x"],
       });

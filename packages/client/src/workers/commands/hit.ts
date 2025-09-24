@@ -1,20 +1,14 @@
 
-import { encodeFunctionData, parseAbi } from 'viem';
+import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
 import { coordToChunkCoord, chunkCommit } from './chunkCommit';
 import { addToQueue, queueSizeByAction } from "../../commandQueue";
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
 const POSITION_TABLE = "EntityPosition";
-
-const hitAbi = parseAbi([
-  // With tool
-  'function hitPlayer(bytes32 caller, bytes32 target, uint16 toolSlot, bytes extraData) returns (bytes32)',
-  // Without tool
-  'function hitPlayer(bytes32 caller, bytes32 target, bytes extraData) returns (bytes32)',
-]);
 
 function encodePlayerEntityId(address: string): `0x${string}` {
   const prefix = "01";
@@ -40,14 +34,14 @@ async function hitWithOptionalTool(
   
   if (hasToolEquipped) {
     data = encodeFunctionData({
-      abi: hitAbi,
+      abi: IWorldAbi,
       functionName: 'hitPlayer',
       args: [caller, target, selectedToolSlot, extraData],
     });
   } else {
     console.log('[hit] No tool equipped — using 3-arg overload.');
     data = encodeFunctionData({
-      abi: hitAbi,
+      abi: IWorldAbi,
       functionName: 'hitPlayer',
       args: [caller, target, extraData],
     });

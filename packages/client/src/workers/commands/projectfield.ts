@@ -2,7 +2,7 @@
 import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { resourceToHex } from "@latticexyz/common";
-import { DEFAULT_PROGRAM_NAMESPACE } from "@dust/programs/src/constants";
+import programsMudConfig from "@dust/programs/mud.config";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 /* ---------------------- World / Indexer ---------------------- */
@@ -13,7 +13,7 @@ const POSITION_TABLE = "EntityPosition";
 /* ---------------------- ProgramId ---------------------- */
 const FORCEFIELD_PROGRAM_ID = resourceToHex({
   type: "system",
-  namespace: DEFAULT_PROGRAM_NAMESPACE,
+  namespace: programsMudConfig.namespace,
   name: "ForceFieldProgra", // (intentional spelling per your snippet)
 }) as `0x${string}`;
 

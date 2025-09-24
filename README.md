@@ -18,7 +18,7 @@ Start with around $0.50 of ETH Gas for Redstone chain here: <a href="https://www
   * User connects with wallet once.
   * Approves session key via signature (off-chain or via `createSession(...)`).
 
-* **Session Key**
+* **Session Key**  CURRENTLY ALL GAMEPLAY IS BASED OFF OF THIS KEY
 
   * A separate ephemeral private key, stored client-side.
   * Authorized by EOA to sign `UserOperations` on their behalf.

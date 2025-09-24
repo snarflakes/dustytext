@@ -1,15 +1,12 @@
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { addToQueue, queueSizeByAction } from "../../commandQueue";
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const POSITION_TABLE = "EntityPosition";
-
-const fillAbi = parseAbi([
-  "function fillBucket(bytes32 caller, uint96 waterCoord, uint16 bucketSlot) returns (bytes32)",
-]);
 
 type EquippedTool = { slot: number; type: string; name: string } | null;
 
@@ -113,7 +110,7 @@ export class FillCommand implements CommandHandler {
       // --- 4) Execute fillBucket ---
       const waterCoord = packCoord96(targetX, targetY, targetZ);
       const data = encodeFunctionData({
-        abi: fillAbi,
+        abi: IWorldAbi,
         functionName: "fillBucket",
         args: [entityId, waterCoord, equippedTool.slot],
       });

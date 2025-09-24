@@ -1,15 +1,12 @@
 import { CommandHandler, CommandContext } from './types';
 import { bigIntMax } from "@latticexyz/common/utils";
-import { encodeFunctionData, parseAbi } from 'viem';
+import { encodeFunctionData } from 'viem';
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const ENERGY_TABLE = "Energy";
 const POSITION_TABLE = "EntityPosition";
-
-const mineAbi = parseAbi([
-  'function mineUntilDestroyed(bytes32 caller, uint96 coord, bytes extraData) returns (bytes32)',
-]);
 
 function packCoord96(x: number, y: number, z: number): bigint {
   const X = BigInt.asUintN(32, BigInt(x));
@@ -124,7 +121,7 @@ export class HealthCommand implements CommandHandler {
 
       try {
         const data = encodeFunctionData({
-          abi: mineAbi,
+          abi: IWorldAbi,
           functionName: 'mineUntilDestroyed',
           args: [entityId, packedCoord, '0x'],
         });

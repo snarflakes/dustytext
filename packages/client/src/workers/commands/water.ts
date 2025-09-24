@@ -1,15 +1,12 @@
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { addToQueue, queueSizeByAction } from "../../commandQueue";
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const POSITION_TABLE = "EntityPosition";
-
-const waterAbi = parseAbi([
-  "function wetFarmland(bytes32 caller, uint96 coord, uint16 bucketSlot) returns (bytes32)",
-]);
 
 type EquippedTool = { slot: number; type: string; name: string } | null;
 
@@ -41,7 +38,7 @@ export async function waterSingleBlock(context: CommandContext, block: { x: numb
 
   const coord = packCoord96(block.x, block.y, block.z);
   const data = encodeFunctionData({
-    abi: waterAbi,
+    abi: IWorldAbi,
     functionName: "wetFarmland",
     args: [entityId, coord, equippedTool!.slot],
   });

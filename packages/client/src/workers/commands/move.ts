@@ -1,12 +1,9 @@
-import { encodeFunctionData, parseAbi } from 'viem';
+import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
 import { withQueuePause } from "../../commandQueue"; // path
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
-
-const MOVE_ABI = parseAbi([
-  'function moveDirections(bytes32 caller, uint8[] directions)',
-]);
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const POSITION_TABLE = "EntityPosition";
@@ -76,7 +73,7 @@ async function trySmartMove(
     try {
       console.log(`Trying smart move plan: ${plan.desc}, directions: ${plan.dirs}`);
       const data = encodeFunctionData({
-        abi: MOVE_ABI,
+        abi: IWorldAbi,
         functionName: 'moveDirections',
         args: [entityId, plan.dirs],
       });
@@ -121,7 +118,7 @@ async function trySmartMoveDiagonal(
     try {
       console.log(`Trying diagonal smart move plan: ${plan.desc}, directions: ${plan.dirs}`);
       const data = encodeFunctionData({
-        abi: MOVE_ABI,
+        abi: IWorldAbi,
         functionName: 'moveDirections',
         args: [entityId, plan.dirs],
       });
@@ -171,7 +168,7 @@ export class MoveCommand implements CommandHandler {
           } catch (smartMoveError) {
             // Fall back to regular diagonal move
             const data = encodeFunctionData({
-              abi: MOVE_ABI,
+              abi: IWorldAbi,
               functionName: 'moveDirections',
               args: [entityId, directionEnums],
             });
@@ -202,7 +199,7 @@ export class MoveCommand implements CommandHandler {
             } catch (smartMoveError) {
               // Fall back to regular move if smart move fails
               const data = encodeFunctionData({
-                abi: MOVE_ABI,
+                abi: IWorldAbi,
                 functionName: 'moveDirections',
                 args: [entityId, directionEnums],
               });
@@ -216,7 +213,7 @@ export class MoveCommand implements CommandHandler {
           } else {
             // Regular move for up/down - no smart move needed
             const data = encodeFunctionData({
-              abi: MOVE_ABI,
+              abi: IWorldAbi,
               functionName: 'moveDirections',
               args: [entityId, directionEnums],
             });

@@ -1,4 +1,4 @@
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import {
   findRecipesByDisplayName,
@@ -8,6 +8,7 @@ import {
 import { OBJECT_TYPES } from "../../objectTypes";
 import type { ObjectName } from "../../objects";
 import { queryIndexer } from "./queryIndexer";
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 // Keep consistent with queryIndexer.ts (single source of truth is best)
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
@@ -17,11 +18,6 @@ const INVENTORY_SLOT_TABLE = "InventorySlot";
 const RECIPES_TABLE = "Recipes";
 const ENTITY_POS_TABLE = "EntityPosition";
 const ENTITY_TYPE_TABLE = "EntityObjectType";
-
-const craftAbi = parseAbi([
-  "function craft(bytes32 caller, bytes32 recipeId, (uint16,uint16)[] inputs)",
-  "function craftWithStation(bytes32 caller, bytes32 station, bytes32 recipeId, (uint16,uint16)[] inputs)",
-]);
 
 // ---------- helpers ----------
 function encodePlayerEntityId(address: string): `0x${string}` {
@@ -394,23 +390,23 @@ export class CraftCommand implements CommandHandler {
         }
 
         data = encodeFunctionData({
-          abi: craftAbi,
+          abi: IWorldAbi,
           functionName: "craftWithStation",
           args: [
             caller,
             north.entityId as `0x${string}`,
             recipeId as `0x${string}`,
-            inputSlots.map((it) => [it.slot, it.amount] as const),
+            inputSlots.map((it) => ({ slot: it.slot, amount: it.amount }) as const),
           ],
         });
       } else {
         data = encodeFunctionData({
-          abi: craftAbi,
+          abi: IWorldAbi,
           functionName: "craft",
           args: [
             caller,
             recipeId as `0x${string}`,
-            inputSlots.map((it) => [it.slot, it.amount] as const),
+            inputSlots.map((it) => ({ slot: it.slot, amount: it.amount }) as const),
           ],
         });
       }

@@ -1,10 +1,7 @@
-import { encodeFunctionData, parseAbi } from 'viem';
+import { encodeFunctionData } from 'viem';
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const CHUNK_SIZE = 16;
-
-const natureAbi = parseAbi([
-  'function chunkCommit(bytes32 caller, uint96 chunkCoord)',
-]);
 
 export function coordToChunkCoord(x: number, y: number, z: number) {
   const cx = Math.floor(x / CHUNK_SIZE);
@@ -29,7 +26,7 @@ export async function chunkCommit(
 ) {
   const chunkPacked = packCoord96(cx, cy, cz);
   const data = encodeFunctionData({
-    abi: natureAbi,
+    abi: IWorldAbi,
     functionName: 'chunkCommit',
     args: [callerEntityId, chunkPacked],
   });

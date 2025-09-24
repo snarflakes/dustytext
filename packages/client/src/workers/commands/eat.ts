@@ -1,11 +1,8 @@
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
-
-const eatAbi = parseAbi([
-  "function eat(bytes32 caller, (uint16 slot, uint16 amount) slotAmount) returns (bytes32)",
-]);
 
 function encodePlayerEntityId(address: string): `0x${string}` {
   const prefix = "01";
@@ -36,7 +33,7 @@ export class EatCommand implements CommandHandler {
 
       // Eat 1 of the equipped item
       const data = encodeFunctionData({
-        abi: eatAbi,
+        abi: IWorldAbi,
         functionName: "eat",
         args: [entityId, { slot: equippedTool.slot, amount: 1 }],
       });

@@ -1,19 +1,13 @@
-import { encodeFunctionData, parseAbi } from 'viem';
+import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
 import { coordToChunkCoord, chunkCommit, packCoord96 } from './chunkCommit';
 import { addToQueue, queueSizeByAction } from "../../commandQueue"; // path as needed
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords"; // your helper
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
 const POSITION_TABLE = "EntityPosition";
-
-const mineAbi = parseAbi([
-  // With tool
-  'function mineUntilDestroyed(bytes32 caller, uint96 coord, uint16 toolSlot, bytes extraData) returns (bytes32)',
-  // Without tool
-  'function mineUntilDestroyed(bytes32 caller, uint96 coord, bytes extraData) returns (bytes32)',
-]);
 
 function encodePlayerEntityId(address: string): `0x${string}` {
   const prefix = "01";
@@ -40,7 +34,7 @@ async function mineWithOptionalTool(
   if (hasToolEquipped) {
     // Use 4-argument version with tool
     data = encodeFunctionData({
-      abi: mineAbi,
+      abi: IWorldAbi,
       functionName: 'mineUntilDestroyed',
       args: [caller, packedCoord, selectedToolSlot, extraData],
     });
@@ -48,7 +42,7 @@ async function mineWithOptionalTool(
     // Use 3-argument version without tool
     console.log('[mine] Selected tool slot', selectedToolSlot, 'is empty — using 3-arg overload to prevent short-circuit.');
     data = encodeFunctionData({
-      abi: mineAbi,
+      abi: IWorldAbi,
       functionName: 'mineUntilDestroyed',
       args: [caller, packedCoord, extraData],
     });

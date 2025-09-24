@@ -381,6 +381,8 @@ export function App() {
       runCommand(`equip ${toolName}`);
     } else if (command === 'unequip') {
       runCommand('unequip');
+    } else if (command === 'energize' || command.startsWith('energize ')) {
+      runCommand(command.trim());
     } else if (command === 'hit' || command.startsWith('hit ')) {
       runCommand(command.trim());
     } else if (command === 'till' || command.startsWith('till ')) {
@@ -391,6 +393,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'plant' || command.startsWith('plant ')) {
       runCommand(command.trim());
+    } else if (command === 'projectfield' || command === 'pf') {
+      runCommand('projectfield');
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

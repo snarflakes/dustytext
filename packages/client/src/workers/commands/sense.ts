@@ -1,6 +1,7 @@
 // sense.ts (typed)
 import { CommandHandler, CommandContext } from "./types";
 import { createCoordLinkHTML } from "../../utils/tileLinksHtml";
+import { toHex } from "viem";
 
 /* ---------------------- Env / constants ---------------------- */
 const INDEXER_URL   = "https://indexer.mud.redstonechain.com/q";
@@ -34,7 +35,7 @@ interface MachineRow extends IndexerRowObj {
   createdAt: number | string | null;
 }
 
-type ForceFieldOnlyRow = { forceField: Hex32 | null } & IndexerRowObj;
+// type ForceFieldOnlyRow = { forceField: Hex32 | null } & IndexerRowObj;
 
 export type ForceFieldInfo = {
   active: boolean;
@@ -52,7 +53,6 @@ const ENTITY_TYPE_BITS = 8n;
 const ENTITY_ID_BITS   = BYTES_32_BITS - ENTITY_TYPE_BITS; // 248
 const VEC3_BITS        = 96n;
 
-//const ENTITY_TYPE_BLOCK    = 0x03;
 const ENTITY_TYPE_FRAGMENT = 0x02; // confirmed by your sample
 
 let FRAGMENT_SHIFT: number | null = null; // auto-discovered: 16/32/64
@@ -67,20 +67,25 @@ function packVec3([x, y, z]: Vec3): bigint {
   return (X << 64n) | (Y << 32n) | Z;
 }
 function encode(entityType: number, data: bigint): Hex32 {
-  const v = (BigInt(entityType) << ENTITY_ID_BITS) | data;
-  // size: 32 bytes
-  const hex = v.toString(16).padStart(64, "0");
-  return (`0x${hex}`) as Hex32;
+  return toHex((BigInt(entityType) << ENTITY_ID_BITS) | data, { size: 32 }) as Hex32;
 }
 function encodeCoord(entityType: number, coord: Vec3): Hex32 {
   const packed = packVec3(coord);
   return encode(entityType, packed << (ENTITY_ID_BITS - VEC3_BITS));
 }
-//function encodeBlock(pos: Vec3): Hex32 {
-//  return encodeCoord(ENTITY_TYPE_BLOCK, pos);
-//}
 function encodeFragment(frag: Vec3): Hex32 {
   return encodeCoord(ENTITY_TYPE_FRAGMENT, frag);
+}
+function decodePosition(entityId: Hex32): Vec3 {
+  const value = BigInt(entityId);
+  const data = value & ((1n << ENTITY_ID_BITS) - 1n);
+  const packedCoord = data >> (ENTITY_ID_BITS - VEC3_BITS);
+  
+  const z = Number(BigInt.asIntN(32, packedCoord & 0xFFFFFFFFn));
+  const y = Number(BigInt.asIntN(32, (packedCoord >> 32n) & 0xFFFFFFFFn));
+  const x = Number(BigInt.asIntN(32, (packedCoord >> 64n) & 0xFFFFFFFFn));
+  
+  return [x, y, z];
 }
 function toFragmentCoordWithShift([x, y, z]: Vec3, shift: number): Vec3 {
   const s = 1 << shift;
@@ -153,39 +158,16 @@ async function fetchPlayerPosition(address: string): Promise<{ x: number; y: num
 // Reset the cached shift to force rediscovery
 FRAGMENT_SHIFT = null;
 
-async function discoverFragmentShift(pos: Vec3): Promise<number> {
+async function discoverFragmentShift(): Promise<number> {
   console.log(`[sense] Starting fragment shift discovery...`);
   if (FRAGMENT_SHIFT != null) return FRAGMENT_SHIFT;
   
-  const candidates: number[] = [4, 5, 6, 7, 8]; // try more shifts: 16, 32, 64, 128, 256
-  for (const s of candidates) {
-    const fragId = encodeFragment(toFragmentCoordWithShift(pos, s));
-    console.log(`[sense] Testing fragment shift ${s} -> fragId: ${fragId}`);
-    const q = `SELECT "forceField" FROM "Fragment" WHERE "entityId"='${fragId}'`;
-    const row = await sqlOne<ForceFieldOnlyRow>(q);
-    if (row) { 
-      console.log(`[sense] Found fragment with shift ${s}:`, row);
-      FRAGMENT_SHIFT = s; 
-      return s; 
-    }
-  }
+  // Based on official map code: fragmentSize = 8, so shift = 3 (2^3 = 8)
+  const correctShift = 3; // 8 blocks per fragment
+  console.log(`[sense] Using official fragment size: 8 blocks (shift ${correctShift})`);
   
-  // Also try a general query to see if ANY fragments exist
-  console.log(`[sense] No fragments found with any shift, checking if Fragment table has any data...`);
-  const generalQ = `SELECT "entityId", "forceField" FROM "Fragment" LIMIT 5`;
-  const generalRes = await fetch(INDEXER_URL, {
-    method: "POST", 
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify([{ address: WORLD_ADDRESS, query: generalQ }])
-  });
-  if (generalRes.ok) {
-    const json = await generalRes.json();
-    console.log(`[sense] Sample Fragment table data:`, JSON.stringify(json, null, 2));
-  }
-  
-  console.log(`[sense] Falling back to shift 5`);
-  FRAGMENT_SHIFT = 5; // fallback to 32
-  return 5;
+  FRAGMENT_SHIFT = correctShift;
+  return correctShift;
 }
 
 /* ---------------------- Core reads ---------------------- */
@@ -196,29 +178,54 @@ async function readFragmentForceFieldByPos(pos: Vec3): Promise<{
   forceFieldCreatedAt: number | string | null;
   extraDrainRate: number | string | null;
 } | null> {
-  console.log(`[sense] Trying direct lookup of known fragment IDs for pos ${pos}`);
+  // Ensure we have discovered the fragment shift
+  if (FRAGMENT_SHIFT == null) {
+    await discoverFragmentShift();
+  }
   
-  // Try the actual fragment IDs we found in the database
-  const knownFragmentIds = [
-    "0x0200000000000000000000000000000000000000000000000000000000000000",
-    "0x020000000000000000ffffffff00000000000000000000000000000000000000", 
-    "0x0200000000000000010000000000000000000000000000000000000000000000",
-    "0x020000000000000002ffffffff00000000000000000000000000000000000000",
-    "0x0200000000000000030000000000000000000000000000000000000000000000"
-  ];
+  // Calculate the correct fragment ID for this position
+  const fragmentCoord = toFragmentCoord(pos);
+  const fragmentId = encodeFragment(fragmentCoord);
   
-  for (const fragmentId of knownFragmentIds) {
-    console.log(`[sense] Checking known fragment ${fragmentId}`);
-    const q = `SELECT "forceField","forceFieldCreatedAt","extraDrainRate" FROM "Fragment" WHERE "entityId"='${fragmentId}'`;
-    const row = await sqlOne<FragmentRow>(q);
-    if (row) {
-      console.log(`[sense] Found fragment row:`, row);
-      return {
-        fragmentId: fragmentId as Hex32,
-        forceField: asHex32(row.forceField ?? null),
-        forceFieldCreatedAt: row.forceFieldCreatedAt ?? null,
-        extraDrainRate: row.extraDrainRate ?? null,
-      };
+  console.log(`[sense] Looking up fragment for pos ${pos} -> fragmentCoord ${fragmentCoord} -> fragmentId ${fragmentId}`);
+  
+  const q = `SELECT "forceField","forceFieldCreatedAt","extraDrainRate" FROM "Fragment" WHERE "entityId"='${fragmentId}'`;
+  const row = await sqlOne<FragmentRow>(q);
+  
+  if (row) {
+    console.log(`[sense] Found fragment row:`, row);
+    return {
+      fragmentId: fragmentId,
+      forceField: asHex32(row.forceField ?? null),
+      forceFieldCreatedAt: row.forceFieldCreatedAt ?? null,
+      extraDrainRate: row.extraDrainRate ?? null,
+    };
+  }
+  
+  // If not found, let's debug by checking what fragments actually exist
+  console.log(`[sense] No fragment found for ${fragmentId}, checking actual fragments...`);
+  const debugQuery = `SELECT "entityId" FROM "Fragment" LIMIT 5`;
+  const debugRes = await fetch(INDEXER_URL, {
+    method: "POST", 
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([{ address: WORLD_ADDRESS, query: debugQuery }])
+  });
+  
+  if (debugRes.ok) {
+    const debugJson = await debugRes.json();
+    const debugTable = debugJson?.result?.[0];
+    if (Array.isArray(debugTable) && debugTable.length >= 2) {
+      const [, ...rows] = debugTable;
+      console.log(`[sense] Actual fragment IDs in database:`);
+      for (const row of rows.slice(0, 3)) {
+        const entityId = row[0] as string;
+        try {
+          const decoded = decodePosition(entityId as Hex32);
+          console.log(`[sense] Fragment ${entityId} -> coords ${decoded}`);
+        } catch (e) {
+          console.log(`[sense] Fragment ${entityId} -> decode failed:`, e);
+        }
+      }
     }
   }
   
@@ -245,7 +252,7 @@ export async function senseActiveForceFieldAt(pos: Vec3): Promise<{
 }> {
   const frag = await readFragmentForceFieldByPos(pos);
   if (!frag) {
-    if (FRAGMENT_SHIFT == null) await discoverFragmentShift(pos);
+    if (FRAGMENT_SHIFT == null) await discoverFragmentShift();
     return {
       active: false,
       fragmentId: encodeFragment(toFragmentCoord(pos)),
@@ -259,19 +266,30 @@ export async function senseActiveForceFieldAt(pos: Vec3): Promise<{
     return { active: false, fragmentId, forceField, extraDrainRate, forceFieldCreatedAt, machineCreatedAt: null, reason: "No forceField set on fragment." };
   }
 
+  console.log(`[sense] Checking force field ${forceField} for fragment ${fragmentId}`);
+  
   const machineCreatedAt = await readMachineCreatedAt(forceField);
-  const eq = machineCreatedAt != null && fragmentId != null
-    && forceFieldCreatedAt != null
-    && String(machineCreatedAt) === String(forceFieldCreatedAt);
+  console.log(`[sense] Machine createdAt: ${machineCreatedAt}, Fragment forceFieldCreatedAt: ${forceFieldCreatedAt}`);
+  
+  // Check if the machine exists and timestamps match
+  const machineExists = machineCreatedAt != null;
+  const timestampsMatch = machineExists && forceFieldCreatedAt != null && String(machineCreatedAt) === String(forceFieldCreatedAt);
+  
+  console.log(`[sense] Machine exists: ${machineExists}, Timestamps match: ${timestampsMatch}`);
+
+  // If machine exists and timestamps match, the force field is active in this fragment
+  const active = machineExists && timestampsMatch;
 
   return {
-    active: !!eq,
+    active,
     fragmentId,
     forceField,
     extraDrainRate,
     forceFieldCreatedAt,
     machineCreatedAt,
-    reason: eq ? undefined : "CreatedAt mismatch (stale/removed machine?).",
+    reason: !machineExists ? "No machine found for this force field." : 
+            !timestampsMatch ? "CreatedAt mismatch (stale/removed machine?)." : 
+            undefined,
   };
 }
 
@@ -287,15 +305,8 @@ export async function senseAtPlayer(address: string) {
 
 /* ---------------------- Reusable API for other commands ---------------------- */
 // small cache per fragment to avoid spam
-const FF_CACHE_TTL_MS = 2000;
 const ffCache = new Map<string, { info: ForceFieldInfo; ts: number }>();
 
-function cacheGet(fragmentId: Hex32): ForceFieldInfo | null {
-  const e = ffCache.get(fragmentId);
-  if (!e) return null;
-  if (Date.now() - e.ts > FF_CACHE_TTL_MS) { ffCache.delete(fragmentId); return null; }
-  return e.info;
-}
 function cacheSet(info: ForceFieldInfo): void {
   ffCache.set(info.fragmentId, { info, ts: Date.now() });
 }
@@ -365,3 +376,16 @@ export class SenseCommand implements CommandHandler {
     }
   }
 }
+
+// Remove unused function
+// async function fetchMachinePosition(machineId: Hex32): Promise<{ x: number; y: number; z: number } | null> {
+//   const q = `SELECT "x","y","z" FROM "${POSITION_TABLE}" WHERE "entityId"='${machineId}'`;
+//   const row = await sqlOne<{ x: number | string | null; y: number | string | null; z: number | string | null }>(q);
+//   if (row) {
+//     const x = asNumber(row.x) ?? 0;
+//     const y = asNumber(row.y) ?? 0;
+//     const z = asNumber(row.z) ?? 0;
+//     return { x, y, z };
+//   }
+//   return null;
+// }

@@ -5,6 +5,7 @@ import { getForceFieldInfoForPlayer, invalidateForceFieldFragment } from "./sens
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
+const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 
 function encodePlayerEntityId(address: string): `0x${string}` {
   const prefix = "01";
@@ -12,8 +13,92 @@ function encodePlayerEntityId(address: string): `0x${string}` {
   return `0x${prefix}${clean.padEnd(64 - prefix.length, "0")}` as `0x${string}`;
 }
 
-function isZero32(x?: `0x${string}` | null) {
-  return !x || /^0x0+$/.test(x);
+async function findNearbyForceFieldStation(playerAddress: string): Promise<`0x${string}` | null> {
+  // Get all machines and check distance to each one
+  const query = `SELECT "entityId" FROM "Machine"`;
+  
+  const response = await fetch(INDEXER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([{ address: WORLD_ADDRESS, query }]),
+  });
+
+  if (!response.ok) return null;
+
+  const result = await response.json();
+  const table = result?.result?.[0];
+  
+  if (!Array.isArray(table) || table.length < 2) return null;
+
+  const [columns, ...rows] = table;
+  const entityIdIndex = columns.indexOf("entityId");
+  
+  if (entityIdIndex === -1) return null;
+
+  // Get player position
+  const playerEntityId = encodePlayerEntityId(playerAddress);
+  const playerPosQuery = `SELECT "x","y","z" FROM "EntityPosition" WHERE "entityId"='${playerEntityId}'`;
+  
+  const playerPosResponse = await fetch(INDEXER_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([{ address: WORLD_ADDRESS, query: playerPosQuery }]),
+  });
+
+  if (!playerPosResponse.ok) return null;
+
+  const playerPosResult = await playerPosResponse.json();
+  const playerPosTable = playerPosResult?.result?.[0];
+  
+  if (!Array.isArray(playerPosTable) || playerPosTable.length < 2) return null;
+
+  const [playerPosCols, playerPosVals] = playerPosTable;
+  const playerPos = Object.fromEntries(playerPosCols.map((k: string, i: number) => [k, playerPosVals[i]]));
+  
+  const playerX = Number(playerPos.x);
+  const playerY = Number(playerPos.y);
+  const playerZ = Number(playerPos.z);
+
+  // Check each machine
+  for (const row of rows) {
+    const machineEntityId = row[entityIdIndex] as string;
+    
+    // Get machine position
+    const machinePosQuery = `SELECT "x","y","z" FROM "EntityPosition" WHERE "entityId"='${machineEntityId}'`;
+    
+    const machinePosResponse = await fetch(INDEXER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ address: WORLD_ADDRESS, query: machinePosQuery }]),
+    });
+
+    if (!machinePosResponse.ok) continue;
+
+    const machinePosResult = await machinePosResponse.json();
+    const machinePosTable = machinePosResult?.result?.[0];
+    
+    if (!Array.isArray(machinePosTable) || machinePosTable.length < 2) continue;
+
+    const [machinePosCols, machinePosVals] = machinePosTable;
+    const machinePos = Object.fromEntries(machinePosCols.map((k: string, i: number) => [k, machinePosVals[i]]));
+    
+    const machineX = Number(machinePos.x);
+    const machineY = Number(machinePos.y);
+    const machineZ = Number(machinePos.z);
+
+    // Check if within 5 blocks (Chebyshev distance)
+    const distance = Math.max(
+      Math.abs(machineX - playerX),
+      Math.abs(machineY - playerY),
+      Math.abs(machineZ - playerZ)
+    );
+
+    if (distance <= 5) {
+      return machineEntityId as `0x${string}`;
+    }
+  }
+
+  return null;
 }
 
 interface EquippedTool {
@@ -32,7 +117,7 @@ export class EnergizeCommand implements CommandHandler {
           ? Math.min(Math.max(1, Math.floor(amountRaw)), 65535)
           : 1;
 
-      // Need an equipped item (batteries). We rely on your global from equip.ts
+      // Need an equipped item (batteries)
       const equippedTool =
         (globalThis as typeof globalThis & { equippedTool: EquippedTool | null }).equippedTool;
 
@@ -54,13 +139,13 @@ export class EnergizeCommand implements CommandHandler {
         );
       }
 
-      // Find the force field station (machine) for the player's current fragment
-      const info = await getForceFieldInfoForPlayer(context.address);
-
-      if (isZero32(info.forceField)) {
+      // Find a nearby force field station (machine)
+      const nearbyStation = await findNearbyForceFieldStation(context.address);
+      
+      if (!nearbyStation) {
         window.dispatchEvent(
           new CustomEvent<string>("worker-log", {
-            detail: "❌ No Force Field Station found for this fragment. Place/build one first.",
+            detail: "❌ No Force Field Station found within 5 blocks. Build one nearby first.",
           }),
         );
         return;
@@ -68,14 +153,13 @@ export class EnergizeCommand implements CommandHandler {
 
       // Build calldata to call World -> MachineSystem.energizeMachine(...)
       const callerEntityId = encodePlayerEntityId(context.address);
-      const machineId = info.forceField; // the station's entityId
 
       const data = encodeFunctionData({
         abi: IWorldAbi,
         functionName: "energizeMachine",
         args: [
           callerEntityId,
-          machineId,
+          nearbyStation, // use the nearby station's entityId
           [{ slot: equippedTool.slot, amount }], // use currently equipped slot
           "0x", // extraData empty
         ],
@@ -94,12 +178,13 @@ export class EnergizeCommand implements CommandHandler {
         gas: 500_000n,
       });
 
-      // Invalidate sense cache for this fragment so follow-up `sense` reflects new energy immediately
+      // Get force field info for cache invalidation
+      const info = await getForceFieldInfoForPlayer(context.address);
       invalidateForceFieldFragment(info.fragmentId);
 
       window.dispatchEvent(
         new CustomEvent<string>("worker-log", {
-          detail: `⚡ Energy infused! Machine: ${machineId}\nTx: ${txHash}`,
+          detail: `⚡ Energy infused! Station: ${nearbyStation}\nTx: ${txHash}`,
         }),
       );
     } catch (error) {

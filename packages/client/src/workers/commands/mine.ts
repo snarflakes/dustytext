@@ -256,6 +256,15 @@ export class MineCommand implements CommandHandler {
           }
         }
         
+        // Check for force field permission error
+        if (errorMessage.includes('0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000314f6e6c7920617070726f7665642063616c6c6572732063616e206d696e6520696e2074686520666f726365206669656c64') ||
+            errorMessage.includes('Only approved callers can mine in the force field')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `🛡️ This area is protected by a force field and you're not on the approved list. You need permission from the field owner to mine here.` 
+          }));
+          return;
+        }
+        
         if (attempt === maxRetries) {
           window.dispatchEvent(new CustomEvent("worker-log", { 
             detail: `❌ Mine failed after ${maxRetries} attempts: ${error}` 

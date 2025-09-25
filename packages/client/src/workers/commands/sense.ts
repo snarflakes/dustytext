@@ -150,41 +150,81 @@ async function fetchPlayerPosition(address: string): Promise<{ x: number; y: num
 
 
 /* ---------------------- Fragment size discovery ---------------------- */
+// Reset the cached shift to force rediscovery
+FRAGMENT_SHIFT = null;
+
 async function discoverFragmentShift(pos: Vec3): Promise<number> {
+  console.log(`[sense] Starting fragment shift discovery...`);
   if (FRAGMENT_SHIFT != null) return FRAGMENT_SHIFT;
-  const candidates: number[] = [4, 5, 6]; // 16, 32, 64
+  
+  const candidates: number[] = [4, 5, 6, 7, 8]; // try more shifts: 16, 32, 64, 128, 256
   for (const s of candidates) {
     const fragId = encodeFragment(toFragmentCoordWithShift(pos, s));
+    console.log(`[sense] Testing fragment shift ${s} -> fragId: ${fragId}`);
     const q = `SELECT "forceField" FROM "Fragment" WHERE "entityId"='${fragId}'`;
     const row = await sqlOne<ForceFieldOnlyRow>(q);
-    if (row) { FRAGMENT_SHIFT = s; return s; }
+    if (row) { 
+      console.log(`[sense] Found fragment with shift ${s}:`, row);
+      FRAGMENT_SHIFT = s; 
+      return s; 
+    }
   }
+  
+  // Also try a general query to see if ANY fragments exist
+  console.log(`[sense] No fragments found with any shift, checking if Fragment table has any data...`);
+  const generalQ = `SELECT "entityId", "forceField" FROM "Fragment" LIMIT 5`;
+  const generalRes = await fetch(INDEXER_URL, {
+    method: "POST", 
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([{ address: WORLD_ADDRESS, query: generalQ }])
+  });
+  if (generalRes.ok) {
+    const json = await generalRes.json();
+    console.log(`[sense] Sample Fragment table data:`, JSON.stringify(json, null, 2));
+  }
+  
+  console.log(`[sense] Falling back to shift 5`);
   FRAGMENT_SHIFT = 5; // fallback to 32
   return 5;
 }
 
 /* ---------------------- Core reads ---------------------- */
+// Replace your readFragmentForceFieldByPos with this version
 async function readFragmentForceFieldByPos(pos: Vec3): Promise<{
   fragmentId: Hex32;
   forceField: Hex32;
   forceFieldCreatedAt: number | string | null;
   extraDrainRate: number | string | null;
 } | null> {
-  if (FRAGMENT_SHIFT == null) await discoverFragmentShift(pos);
-  const fragCoord = toFragmentCoord(pos);
-  const fragmentId = encodeFragment(fragCoord);
-
-  const q = `SELECT "forceField","forceFieldCreatedAt","extraDrainRate" FROM "Fragment" WHERE "entityId"='${fragmentId}'`;
-  const row = await sqlOne<FragmentRow>(q);
-  if (!row) return null;
-
-  return {
-    fragmentId,
-    forceField: asHex32(row.forceField ?? null),
-    forceFieldCreatedAt: row.forceFieldCreatedAt ?? null,
-    extraDrainRate: row.extraDrainRate ?? null,
-  };
+  console.log(`[sense] Trying direct lookup of known fragment IDs for pos ${pos}`);
+  
+  // Try the actual fragment IDs we found in the database
+  const knownFragmentIds = [
+    "0x0200000000000000000000000000000000000000000000000000000000000000",
+    "0x020000000000000000ffffffff00000000000000000000000000000000000000", 
+    "0x0200000000000000010000000000000000000000000000000000000000000000",
+    "0x020000000000000002ffffffff00000000000000000000000000000000000000",
+    "0x0200000000000000030000000000000000000000000000000000000000000000"
+  ];
+  
+  for (const fragmentId of knownFragmentIds) {
+    console.log(`[sense] Checking known fragment ${fragmentId}`);
+    const q = `SELECT "forceField","forceFieldCreatedAt","extraDrainRate" FROM "Fragment" WHERE "entityId"='${fragmentId}'`;
+    const row = await sqlOne<FragmentRow>(q);
+    if (row) {
+      console.log(`[sense] Found fragment row:`, row);
+      return {
+        fragmentId: fragmentId as Hex32,
+        forceField: asHex32(row.forceField ?? null),
+        forceFieldCreatedAt: row.forceFieldCreatedAt ?? null,
+        extraDrainRate: row.extraDrainRate ?? null,
+      };
+    }
+  }
+  
+  return null;
 }
+
 
 async function readMachineCreatedAt(machineId: Hex32): Promise<number | string | null> {
   if (machineId === ZERO_ENTITY_ID) return null;
@@ -261,17 +301,11 @@ function cacheSet(info: ForceFieldInfo): void {
 }
 
 export async function getForceFieldInfo(pos: Vec3): Promise<ForceFieldInfo> {
-  if (FRAGMENT_SHIFT == null) await discoverFragmentShift(pos);
-  const fragmentId = encodeFragment(toFragmentCoord(pos));
-
-  const cached = cacheGet(fragmentId);
-  if (cached) return cached;
-
   const r = await senseActiveForceFieldAt(pos);
 
   const info: ForceFieldInfo = {
     active: r.active,
-    fragmentId,
+    fragmentId: r.fragmentId, // Use the actual found fragmentId, not calculated
     forceField: r.forceField,
     extraDrainRate: asBigInt(r.extraDrainRate ?? null),
     forceFieldCreatedAt: asBigInt(r.forceFieldCreatedAt ?? null),

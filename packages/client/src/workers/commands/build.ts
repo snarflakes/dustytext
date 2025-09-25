@@ -1,16 +1,13 @@
-import { encodeFunctionData, parseAbi } from "viem";
+import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { packCoord96 } from "./chunkCommit";
 import { addToQueue, queueSizeByAction } from "../../commandQueue";
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const POSITION_TABLE = "EntityPosition";
-
-const buildAbi = parseAbi([
-  "function build(bytes32 caller, uint96 coord, uint16 slot, bytes extraData) returns (bytes32)",
-]);
 
 type EquippedTool = { slot: number; type: string; name: string } | null;
 
@@ -106,7 +103,7 @@ export class BuildCommand implements CommandHandler {
 
         const packed = packCoord96(x, y, z);
         const data = encodeFunctionData({
-          abi: buildAbi,
+          abi: IWorldAbi,
           functionName: "build",
           args: [entityId, packed, equippedTool.slot, "0x"],
         });

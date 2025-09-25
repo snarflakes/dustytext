@@ -1,35 +1,9 @@
-import { encodeFunctionData, createPublicClient, http } from 'viem';
+import { encodeFunctionData, createPublicClient, http, Hex } from 'viem';
 import { redstone } from 'viem/chains';
 import { CommandHandler, CommandContext } from './types';
+import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const SPAWN_CONTRACT = '0x253eb85b3c953bfe3827cc14a151262482e7189c';
-
-const abi = {
-  getRandomSpawnCoord: [
-    {
-      name: 'getRandomSpawnCoord',
-      type: 'function',
-      inputs: [
-        { name: 'blockNumber', type: 'uint256' },
-        { name: 'player', type: 'address' }
-      ],
-      outputs: [{ name: '', type: 'uint96' }],
-      stateMutability: 'view'
-    }
-  ],
-  randomSpawn: [
-    {
-      name: 'randomSpawn',
-      type: 'function',
-      inputs: [
-        { name: 'blockNumber', type: 'uint256' },
-        { name: 'spawnCoord', type: 'uint96' }
-      ],
-      outputs: [],
-      stateMutability: 'nonpayable'
-    }
-  ]
-};
 
 export class SpawnCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {
@@ -47,13 +21,13 @@ export class SpawnCommand implements CommandHandler {
 
         const spawnCoord = await publicClient.readContract({
           address: SPAWN_CONTRACT,
-          abi: abi.getRandomSpawnCoord,
+          abi: IWorldAbi,
           functionName: 'getRandomSpawnCoord',
-          args: [blockNumber.toString(), context.address]
+          args: [blockNumber, context.address as Hex]
         });
 
         const data = encodeFunctionData({
-          abi: abi.randomSpawn,
+          abi: IWorldAbi,
           functionName: 'randomSpawn',
           args: [blockNumber, spawnCoord as bigint]
         });

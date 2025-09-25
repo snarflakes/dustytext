@@ -4,6 +4,34 @@ import { getAIConfig, setAIConfig, buildDefaultSystemPrompt, DEFAULT_ALLOWED_COM
 // Storage for custom prompt addition
 let customPromptAddition: string | null = null;
 
+// Load from localStorage on module initialization
+function loadCustomPromptFromStorage(): void {
+  try {
+    const stored = localStorage.getItem('dustytext-custom-prompt');
+    if (stored) {
+      customPromptAddition = stored;
+    }
+  } catch (error) {
+    console.warn('Failed to load custom prompt from localStorage:', error);
+  }
+}
+
+// Save to localStorage
+function saveCustomPromptToStorage(): void {
+  try {
+    if (customPromptAddition) {
+      localStorage.setItem('dustytext-custom-prompt', customPromptAddition);
+    } else {
+      localStorage.removeItem('dustytext-custom-prompt');
+    }
+  } catch (error) {
+    console.warn('Failed to save custom prompt to localStorage:', error);
+  }
+}
+
+// Initialize from localStorage on module load
+loadCustomPromptFromStorage();
+
 export class CustomAICommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
     const subCommand = args[0]?.toLowerCase();
@@ -15,6 +43,7 @@ export class CustomAICommand implements CommandHandler {
     
     if (subCommand === 'clear') {
       customPromptAddition = null;
+      saveCustomPromptToStorage();
       this.updateAIConfig();
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: "🎭 Custom AI prompt addition cleared" 
@@ -32,6 +61,7 @@ export class CustomAICommand implements CommandHandler {
     }
     
     customPromptAddition = addition;
+    saveCustomPromptToStorage();
     this.updateAIConfig();
     window.dispatchEvent(new CustomEvent("worker-log", { 
       detail: `🎭 Custom AI prompt addition set: "${addition}"` 

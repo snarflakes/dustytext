@@ -28,6 +28,7 @@ export class HelpCommand implements CommandHandler {
       '       [Unequip] stop using your current tool, they break with use!,',
       '       [Eat] first equip the food, then eat food to restore health,',
       '       [Hit] other players with or without an equipped tool, also loots a dead player if standing above them,',
+      '       [Energize] power machines with equipped batteries, energize <amount> (default: 1),',
       '       [Sense] check force field status at your location, or at a specific coordinate, sense <x> <y> <z>,',
       '  [RegisterAI] configure AI assistant settings for AI mode,',
       '  [CustomAI] add custom instructions to future AI prompts, movement directions, personality,',
@@ -44,6 +45,7 @@ export class HelpCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

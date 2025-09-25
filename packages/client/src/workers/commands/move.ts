@@ -144,9 +144,76 @@ async function trySmartMoveDiagonal(
 }
 
 export class MoveCommand implements CommandHandler {
-  async execute(context: CommandContext, direction: string): Promise<void> {
+  async execute(context: CommandContext, ...directions: string[]): Promise<void> {
     await withQueuePause(async () => {
       try {
+        // Handle multiple directions (e.g., "w w w w w" or "nw nw nw nw nw")
+        if (directions.length > 1) {
+          const allDirections: DirectionCode[] = [];
+          const moveDescription = directions.join(' ');
+          
+          for (const dir of directions) {
+            const lowerDir = dir.toLowerCase();
+            if (diagonalDirections[lowerDir]) {
+              // Add both directions for diagonal
+              allDirections.push(...diagonalDirections[lowerDir] as DirectionCode[]);
+            } else {
+              const dirEnum = directionToEnum[lowerDir];
+              if (dirEnum === undefined) {
+                throw new Error(`Invalid direction: ${dir}`);
+              }
+              allDirections.push(dirEnum as DirectionCode);
+            }
+          }
+          
+          const entityId = encodePlayerEntityId(context.address);
+          const beforePos = await getPlayerPosition(entityId);
+          
+          const data = encodeFunctionData({
+            abi: IWorldAbi,
+            functionName: 'moveDirections',
+            args: [entityId, allDirections],
+          });
+
+          const txHash = await context.sessionClient.sendTransaction({
+            to: WORLD_ADDRESS,
+            data,
+            gas: 200000n, // Increased gas for multiple moves
+          });
+          
+          // Wait for indexer and show completion message
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          const afterPos = await getPlayerPosition(entityId);
+          let elevationMessage = "";
+          
+          if (beforePos && afterPos) {
+            const elevationChange = afterPos.y - beforePos.y;
+            if (elevationChange < 0) {
+              const drop = Math.abs(elevationChange);
+              if (drop === 1) {
+                elevationMessage = " (you step downwards)";
+              } else if (drop >= 3) {
+                elevationMessage = " (You scramble and fall, taking damage)";
+              }
+            }
+          }
+
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `✅ You ran ${moveDescription} ${elevationMessage}. Tx: ${txHash}` 
+          }));
+
+          // Auto-look after move
+          const { getCommand } = await import('./registry');
+          const lookCommand = getCommand('look');
+          if (lookCommand) {
+            await lookCommand.execute(context);
+          }
+          return;
+        }
+        
+        // Single direction - existing code continues here...
+        const direction = directions[0];
         const lowerDirection = direction.toLowerCase();
         let directionEnums: number[];
         

@@ -8,6 +8,7 @@ export class HelpCommand implements CommandHandler {
       '       [Spawn] if it doesnt work, try again,', 
       '       [Look]/l check your location,', 
       '       [Move] move in a direction, directions: north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw),',
+      '       [Move] alternate syntax: Ex: move e e e e e to sprint multiple moves in one transaction, will fail if no path,',
       '       [Survey] detailed horizon sensing - slow wide search for water and mountains,',
       '       [Health]/hp,', 
       '       [Explore]/exp examine your immediate environment, set command mine/water/build/till/fill to allow precise block selection,',

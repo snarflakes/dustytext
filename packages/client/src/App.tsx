@@ -354,9 +354,14 @@ export function App() {
     } else if (command.startsWith('ai ') || command === 'ai') {
       runCommand(command);
     } else if (command.startsWith('move ') || ['north', 'n', 'south', 's', 'east', 'e', 'west', 'w', 'northeast', 'ne', 'northwest', 'nw', 'southeast', 'se', 'southwest', 'sw', 'up', 'u', 'down'].includes(command)) {
-      const direction = command.startsWith('move ') ? command.split(' ')[1] : command;
-      console.log(`Move command: ${direction}, Address: ${address}`);
-      runCommand(`move ${direction}`);
+      if (command.startsWith('move ')) {
+        // Handle "move w w w w w" or "move nw nw nw"
+        const directions = command.split(' ').slice(1); // Remove 'move' and get all directions
+        runCommand(`move ${directions.join(' ')}`);
+      } else {
+        // Handle single direction commands like "w" or "nw"
+        runCommand(`move ${command}`);
+      }
     } else if (command === 'survey') {
       runCommand('survey');
     } else if (command === 'water' || command.startsWith('water ')) {

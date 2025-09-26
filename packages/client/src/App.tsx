@@ -429,6 +429,11 @@ export function App() {
       ]);
     } else if (command === 'clear' || command === 'cls') {
       setLog([]);
+    } else if (command.startsWith('attach ')) {
+      const args = command.split(' ').slice(1);
+      runCommand(`attach ${args.join(' ')}`);
+    } else if (command === 'detach' || command.startsWith('detach ')) {
+      runCommand(command);
     } else {
       setLog(prev => [...prev, `🤖 Unknown command: ${command}. Type 'help' for commands.`]);
     }

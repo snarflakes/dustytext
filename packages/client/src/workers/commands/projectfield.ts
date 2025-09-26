@@ -114,6 +114,35 @@ export class ProjectFieldCommand implements CommandHandler {
       }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      
+      // Check for "Target is not a smart entity" error
+      if (msg.includes('546172676574206973206e6f74206120736d61727420656e7469747900000000') ||
+          msg.includes('Target is not a smart entity')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `❌ Cannot attach Force Field program - the block beneath you is not a smart entity. You need to be standing above a Force Field Station or compatible machine first.` 
+        }));
+        return;
+      }
+      
+      // Check for gas limit error
+      if (msg.includes('0x34a44dbe') || 
+          msg.includes('gas limit too low')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+        }));
+        return;
+      }
+      
+      // Check for energy error (player is dead)
+      if (msg.includes('Entity has no energy') || 
+          msg.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `💀 You are dead. Spawn to be reborn.` 
+        }));
+        return;
+      }
+      
+      // Generic error message
       window.dispatchEvent(new CustomEvent<string>("worker-log", { detail: `❌ projectfield failed: ${msg}` }));
     }
   }

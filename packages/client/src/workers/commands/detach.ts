@@ -8,8 +8,7 @@ import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 const WORLD_ADDRESS  = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const INDEXER_URL    = "https://indexer.mud.redstonechain.com/q";
 const POSITION_TABLE = "EntityPosition";
-
-type Vec3 = [number, number, number];
+const ZERO_ENTITY_ID = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
 
 /* ---------------------- Utilities ---------------------- */
 function encodePlayerEntityId(address: string): `0x${string}` {
@@ -46,18 +45,6 @@ async function getPlayerPosition(address: string): Promise<{ x: number; y: numbe
   if (rows.length === 0) return null;
   const { x, y, z } = rows[0];
   return { x: Number(x), y: Number(y), z: Number(z) };
-}
-
-async function fetchPlayerBlock(address: string): Promise<Vec3 | null> {
-  const pos = await getPlayerPosition(address);
-  return pos ? [pos.x, pos.y, pos.z] : null;
-}
-
-async function getEntityIdAtPosition([x, y, z]: Vec3): Promise<`0x${string}` | null> {
-  const rows = await indexerQuery<{ entityId: `0x${string}` }>(
-    `SELECT "entityId" FROM "${POSITION_TABLE}" WHERE "x"=${x} AND "y"=${y} AND "z"=${z} LIMIT 1`,
-  );
-  return rows.length ? (rows[0].entityId as `0x${string}`) : null;
 }
 
 function chebyshev(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }) {
@@ -119,35 +106,39 @@ export class DetachProgramCommand implements CommandHandler {
     try {
       // Target resolution priority:
       // 1) explicit entityId arg
-      // 2) entity at the block directly beneath the player
-      // 3) nearest Force Field Station with a program
+      // 2) nearby Force Field Station (machine)
+      // 3) entity at the block directly beneath the player
       let targetEntityId: `0x${string}` | null =
         isHexEntityId(args[0]) ? (args[0].toLowerCase() as `0x${string}`) : null;
 
       if (!targetEntityId) {
-        const pos = await fetchPlayerBlock(context.address);
-        if (!pos) throw new Error("You float amongst the stars. Try 'spawn' first.");
-        const below: Vec3 = [pos[0], pos[1] - 1, pos[2]];
-
-        targetEntityId = await getEntityIdAtPosition(below);
-
-        if (!targetEntityId) {
-          // No entity at the block beneath; fallback to nearby station
+        // First check if there's a force field at the player's position
+        const forceFieldInfo = await getForceFieldInfoForPlayer(context.address);
+        if (forceFieldInfo.forceField !== ZERO_ENTITY_ID) {
+          targetEntityId = forceFieldInfo.forceField; // Use the machine entity ID
+          window.dispatchEvent(
+            new CustomEvent<string>("worker-log", {
+              detail: `ℹ️ Using force field machine ${targetEntityId} as detach target.`,
+            }),
+          );
+        } else {
+          // Fallback to nearby station search
           const station = await findNearbyForceFieldStation(context.address);
-          if (!station) {
+          if (station) {
+            targetEntityId = station;
             window.dispatchEvent(
               new CustomEvent<string>("worker-log", {
-                detail: "❌ No entity beneath you and no Force Field Station within 5 blocks.",
+                detail: `ℹ️ Using nearby Force Field Station ${station} as detach target.`,
+              }),
+            );
+          } else {
+            window.dispatchEvent(
+              new CustomEvent<string>("worker-log", {
+                detail: "❌ No force field machine found at your location or within 5 blocks.",
               }),
             );
             return;
           }
-          targetEntityId = station;
-          window.dispatchEvent(
-            new CustomEvent<string>("worker-log", {
-              detail: `ℹ️ Falling back to nearby station ${station} as detach target.`,
-            }),
-          );
         }
       }
 

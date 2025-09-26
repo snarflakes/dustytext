@@ -2,6 +2,7 @@
 import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { resourceToHex } from "@latticexyz/common";
+import { getForceFieldInfoForPlayer } from "./sense";
 import programsMudConfig from "@dust/programs/mud.config";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
@@ -9,6 +10,7 @@ import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 const WORLD_ADDRESS  = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const INDEXER_URL    = "https://indexer.mud.redstonechain.com/q";
 const POSITION_TABLE = "EntityPosition";
+const ZERO_ENTITY_ID = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
 
 /* ---------------------- ProgramId ---------------------- */
 const FORCEFIELD_PROGRAM_ID = resourceToHex({
@@ -89,18 +91,29 @@ function encodeBlock(pos: Vec3): Hex32 {
 export class ProjectFieldCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {
     try {
-      // Block directly beneath the player
-      const pos = await fetchPlayerBlock(context.address);
-      if (!pos) throw new Error("You float amongst the stars. Try 'spawn' first.");
-      const target: Vec3 = [pos[0], pos[1] - 1, pos[2]];
+      // Find the force field machine entity at the player's location
+      const forceFieldInfo = await getForceFieldInfoForPlayer(context.address);
+      let targetEntityId: `0x${string}`;
+      let targetCoords: Vec3 = [0, 0, 0]; // Default coords for logging
+      
+      if (forceFieldInfo.forceField !== ZERO_ENTITY_ID) {
+        // Use the existing machine entity
+        targetEntityId = forceFieldInfo.forceField;
+        // We don't know exact coords for existing machine, use default
+      } else {
+        // No force field found - need to target the block beneath player for new attachment
+        const pos = await fetchPlayerBlock(context.address);
+        if (!pos) throw new Error("You float amongst the stars. Try 'spawn' first.");
+        targetCoords = [pos[0], pos[1] - 1, pos[2]];
+        targetEntityId = encodeBlock(targetCoords);
+      }
 
       const caller = encodePlayerEntityId(context.address);
-      const machineOrBlockEntityId = encodeBlock(target);
 
       const data = encodeFunctionData({
         abi: IWorldAbi,
         functionName: "attachProgram",
-        args: [caller, machineOrBlockEntityId, FORCEFIELD_PROGRAM_ID, "0x"],
+        args: [caller, targetEntityId, FORCEFIELD_PROGRAM_ID, "0x"],
       });
 
       const txHash = await context.sessionClient.sendTransaction({
@@ -110,7 +123,7 @@ export class ProjectFieldCommand implements CommandHandler {
       });
 
       window.dispatchEvent(new CustomEvent<string>("worker-log", {
-        detail: `🛰️ Attaching Force Field program to block beneath you at (${target[0]}, ${target[1]}, ${target[2]}).\nTx: ${txHash}`,
+        detail: `🛰️ Attaching Force Field program to machine at (${targetCoords[0]}, ${targetCoords[1]}, ${targetCoords[2]}).\nTx: ${txHash}`,
       }));
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

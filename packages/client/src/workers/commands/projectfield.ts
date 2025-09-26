@@ -142,6 +142,15 @@ export class ProjectFieldCommand implements CommandHandler {
         return;
       }
       
+      // Check for "Existing program must be detached" error
+      if (msg.includes('4578697374696e672070726f6772616d206d75737420626520646574616368656400000000000000000000000000000000000000000000000000000000000000') ||
+          msg.includes('Existing program must be detached')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `❌ A program is already attached to this machine. Use 'detach' first to remove the existing program before attaching a new one.` 
+        }));
+        return;
+      }
+      
       // Generic error message
       window.dispatchEvent(new CustomEvent<string>("worker-log", { detail: `❌ projectfield failed: ${msg}` }));
     }

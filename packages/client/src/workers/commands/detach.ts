@@ -106,16 +106,15 @@ export class DetachProgramCommand implements CommandHandler {
     try {
       // Target resolution priority:
       // 1) explicit entityId arg
-      // 2) nearby Force Field Station (machine)
-      // 3) entity at the block directly beneath the player
+      // 2) force field machine from sense module
       let targetEntityId: `0x${string}` | null =
         isHexEntityId(args[0]) ? (args[0].toLowerCase() as `0x${string}`) : null;
 
       if (!targetEntityId) {
-        // First check if there's a force field at the player's position
+        // Use the sense module to find force field info
         const forceFieldInfo = await getForceFieldInfoForPlayer(context.address);
         if (forceFieldInfo.forceField !== ZERO_ENTITY_ID) {
-          targetEntityId = forceFieldInfo.forceField; // Use the machine entity ID
+          targetEntityId = forceFieldInfo.forceField;
           window.dispatchEvent(
             new CustomEvent<string>("worker-log", {
               detail: `ℹ️ Using force field machine ${targetEntityId} as detach target.`,
@@ -142,60 +141,29 @@ export class DetachProgramCommand implements CommandHandler {
         }
       }
 
-      // If there's a nearby station, enforce/verify it's not energized
-      const station = await findNearbyForceFieldStation(context.address);
-      if (station) {
-        const energy = await getMachineEnergy(station);
-        if (energy != null && energy > 0) {
-          window.dispatchEvent(
-            new CustomEvent<string>("worker-log", {
-              detail: `❌ Station appears energized (energy=${energy}). Detach is only allowed when energy == 0.`,
-            }),
-          );
-          return;
-        }
-      } else {
-        // Can't verify energy status; warn but proceed—the on-chain check will still guard.
+      // Check if machine has energy (detach only allowed when energy == 0)
+      const energy = await getMachineEnergy(targetEntityId);
+      if (energy != null && energy > 0) {
         window.dispatchEvent(
           new CustomEvent<string>("worker-log", {
-            detail:
-              "⚠️ No nearby station found to verify energy; attempting detach anyway (allowed only when the field has no energy).",
-          }),
-        );
-      }
-
-      // Confirm there is actually a program on the target
-      const attachedProgram = await getAttachedProgram(targetEntityId);
-      if (!attachedProgram) {
-        // Try to get more debug info about what's in the EntityProgram table
-        const debugRows = await indexerQuery<Record<string, unknown>>(
-          `SELECT * FROM "EntityProgram" WHERE "entityId"='${targetEntityId}'`
-        );
-        
-        const debugInfo = debugRows.length > 0 
-          ? `\nDebug: Found ${debugRows.length} EntityProgram rows: ${JSON.stringify(debugRows[0])}`
-          : `\nDebug: No rows found in EntityProgram table for ${targetEntityId}`;
-          
-        window.dispatchEvent(
-          new CustomEvent<string>("worker-log", {
-            detail: `ℹ️ No program is attached to ${targetEntityId}. Nothing to detach.${debugInfo}`,
+            detail: `❌ Machine has energy (${energy}). Detach is only allowed when energy == 0.`,
           }),
         );
         return;
       }
 
+      // Try the detach operation - let the contract handle program validation
       const caller = encodePlayerEntityId(context.address);
 
-      // IWorld uses plain names (attachProgram/detachProgram) per your template.
       const data = encodeFunctionData({
         abi: IWorldAbi,
         functionName: "detachProgram",
-        args: [caller, targetEntityId, "0x"], // extraData empty
+        args: [caller, targetEntityId, "0x"],
       });
 
       window.dispatchEvent(
         new CustomEvent<string>("worker-log", {
-          detail: `🧰 Detaching program (${attachedProgram}) from ${targetEntityId}...`,
+          detail: `🧰 Attempting to detach program from ${targetEntityId}...`,
         }),
       );
 
@@ -205,17 +173,9 @@ export class DetachProgramCommand implements CommandHandler {
         gas: 300_000n,
       });
 
-      // Best-effort cache invalidation for your UI
-      try {
-        const info = await getForceFieldInfoForPlayer(context.address);
-        invalidateForceFieldFragment(info.fragmentId);
-      } catch {
-        /* ignore */
-      }
-
       window.dispatchEvent(
         new CustomEvent<string>("worker-log", {
-          detail: `🧹 Program detached from ${targetEntityId}\nTx: ${txHash}`,
+          detail: `🧹 Detach transaction sent for ${targetEntityId}\nTx: ${txHash}`,
         }),
       );
     } catch (err) {

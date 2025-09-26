@@ -176,9 +176,18 @@ export class DetachProgramCommand implements CommandHandler {
       // Confirm there is actually a program on the target
       const attachedProgram = await getAttachedProgram(targetEntityId);
       if (!attachedProgram) {
+        // Try to get more debug info about what's in the EntityProgram table
+        const debugRows = await indexerQuery<Record<string, unknown>>(
+          `SELECT * FROM "EntityProgram" WHERE "entityId"='${targetEntityId}'`
+        );
+        
+        const debugInfo = debugRows.length > 0 
+          ? `\nDebug: Found ${debugRows.length} EntityProgram rows: ${JSON.stringify(debugRows[0])}`
+          : `\nDebug: No rows found in EntityProgram table for ${targetEntityId}`;
+          
         window.dispatchEvent(
           new CustomEvent<string>("worker-log", {
-            detail: `ℹ️ No program is attached to ${targetEntityId}. Nothing to detach.`,
+            detail: `ℹ️ No program is attached to ${targetEntityId}. Nothing to detach.${debugInfo}`,
           }),
         );
         return;

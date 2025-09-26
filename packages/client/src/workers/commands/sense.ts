@@ -240,6 +240,13 @@ async function readMachineCreatedAt(machineId: Hex32): Promise<number | string |
   return row ? (row.createdAt ?? null) : null;
 }
 
+async function readMachineEnergy(machineId: Hex32): Promise<number | null> {
+  if (machineId === ZERO_ENTITY_ID) return null;
+  const q = `SELECT "energy" FROM "Energy" WHERE "entityId"='${machineId}'`;
+  const row = await sqlOne<{ energy: string | number }>(q);
+  return row ? Number(row.energy ?? 0) : null;
+}
+
 /* ---------------------- Sense logic ---------------------- */
 export async function senseActiveForceFieldAt(pos: Vec3): Promise<{
   active: boolean;
@@ -269,16 +276,27 @@ export async function senseActiveForceFieldAt(pos: Vec3): Promise<{
   console.log(`[sense] Checking force field ${forceField} for fragment ${fragmentId}`);
   
   const machineCreatedAt = await readMachineCreatedAt(forceField);
-  console.log(`[sense] Machine createdAt: ${machineCreatedAt}, Fragment forceFieldCreatedAt: ${forceFieldCreatedAt}`);
+  const machineEnergy = await readMachineEnergy(forceField);
+  console.log(`[sense] Machine createdAt: ${machineCreatedAt}, Fragment forceFieldCreatedAt: ${forceFieldCreatedAt}, Energy: ${machineEnergy}`);
   
   // Check if the machine exists and timestamps match
   const machineExists = machineCreatedAt != null;
   const timestampsMatch = machineExists && forceFieldCreatedAt != null && String(machineCreatedAt) === String(forceFieldCreatedAt);
+  const hasEnergy = machineEnergy != null && machineEnergy > 0;
   
-  console.log(`[sense] Machine exists: ${machineExists}, Timestamps match: ${timestampsMatch}`);
+  console.log(`[sense] Machine exists: ${machineExists}, Timestamps match: ${timestampsMatch}, Has energy: ${hasEnergy}`);
 
-  // If machine exists and timestamps match, the force field is active in this fragment
-  const active = machineExists && timestampsMatch;
+  // Force field is active only if machine exists, timestamps match, AND has energy
+  const active = machineExists && timestampsMatch && hasEnergy;
+
+  let reason: string | undefined;
+  if (!machineExists) {
+    reason = "No machine found for this force field.";
+  } else if (!timestampsMatch) {
+    reason = "CreatedAt mismatch (stale/removed machine?).";
+  } else if (!hasEnergy) {
+    reason = "Forcefield is present but has been completely depleted.";
+  }
 
   return {
     active,
@@ -287,9 +305,7 @@ export async function senseActiveForceFieldAt(pos: Vec3): Promise<{
     extraDrainRate,
     forceFieldCreatedAt,
     machineCreatedAt,
-    reason: !machineExists ? "No machine found for this force field." : 
-            !timestampsMatch ? "CreatedAt mismatch (stale/removed machine?)." : 
-            undefined,
+    reason,
   };
 }
 

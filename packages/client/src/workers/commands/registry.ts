@@ -27,6 +27,7 @@ import { HitCommand } from './hit.js';
 import { SenseCommand } from './sense';
 import { EnergizeCommand } from './energize';
 import { ProjectFieldCommand } from './projectfield';
+import { DetachProgramCommand } from './detach';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -56,6 +57,7 @@ commands.set('hit', new HitCommand());
 commands.set('sense', new SenseCommand());
 commands.set('energize', new EnergizeCommand());
 commands.set('projectfield', new ProjectFieldCommand());
+commands.set('detach', new DetachProgramCommand());
 
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"

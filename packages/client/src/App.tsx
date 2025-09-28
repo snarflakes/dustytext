@@ -13,6 +13,7 @@ import { getAIConfig } from "./workers/commands/registerAI";
 import { setAIActive } from "./workers/ai/runtime";
 import { appendAILog } from "./workers/ai/runtime";
 import { getEquippedToolName } from "./workers/commands/equip";
+import { getForceFieldInfoForPlayer } from './workers/commands/sense';
 
 declare global {
   interface Window {
@@ -288,7 +289,7 @@ export function App() {
     return () => window.removeEventListener("worker-log", onWorkerLog as EventListener);
   }, []);
 
-  const handleCommand = (e: React.FormEvent) => {
+  const handleCommand = async (e: React.FormEvent) => {
     e.preventDefault();
     const raw = input.trim();
     const command = raw.toLowerCase(); // routing only
@@ -419,14 +420,27 @@ export function App() {
       setLog(prev => [...prev, `💰 Balance: ${formatted}`]);
     } else if (command === 'debug' || command === 'd') {
       setLog(prev => [...prev, `🔍 Debug info:`]);
-      setLog(prev => [...prev, `  Address: ${address}`]);
-      setLog(prev => [...prev, 
-        '📖 Available commands:',
-        '  Movement: north/n, south/s, east/e, west/w',
-        '  Game: look/l, players/who, balance/bal',
-        '  System: help/h, clear',
-        '  Debug: debug/d'
-      ]);
+      setLog(prev => [...prev, `  EOA Address: ${address}`]);
+      
+      // Show session address if available
+      if (sessionClient?.account) {
+        const sessionAddress = typeof sessionClient.account === 'string' 
+          ? sessionClient.account 
+          : sessionClient.account.address;
+        setLog(prev => [...prev, `  Session Address: ${sessionAddress}`]);
+        
+        // Check for forcefields owned by session address
+        try {
+          const forceFieldInfo = await getForceFieldInfoForPlayer(sessionAddress);
+          if (forceFieldInfo.active) {
+            setLog(prev => [...prev, `  Forcefield: ACTIVE (${forceFieldInfo.forceField})`]);
+          } else {
+            setLog(prev => [...prev, `  Forcefield: NO forcefields owned by this session address`]);
+          }
+        } catch (error) {
+          setLog(prev => [...prev, `  Forcefield: NO forcefields owned by this session address`]);
+        }
+      }
     } else if (command === 'clear' || command === 'cls') {
       setLog([]);
     } else if (command.startsWith('attach ')) {

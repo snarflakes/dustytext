@@ -401,6 +401,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'projectfield' || command === 'pf') {
       runCommand('projectfield');
+    } else if (command === 'sleep') {
+      runCommand('sleep');
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

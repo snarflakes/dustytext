@@ -33,6 +33,7 @@ export class HelpCommand implements CommandHandler {
       '       [Sense] check force field status at your location, or at a specific coordinate, sense x y z,',
       '       [ProjectField] create a force field at your location, or at a specific coordinate, projectfield x y z,',
       '       [Detach] remove force field from a machine, or from your location, detach x y z,',
+      '       [Sleep] rest in a bed to guard health and energy,',            
       '  [RegisterAI] configure AI assistant settings for AI mode,',
       '  [CustomAI] add custom instructions to future AI prompts, movement directions, personality,',
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',

@@ -403,6 +403,10 @@ export function App() {
       runCommand('projectfield');
     } else if (command === 'sleep') {
       runCommand('sleep');
+    } else if (command === 'scan' || command.startsWith('scan ')) {
+      runCommand(command.trim());
+    } else if (command === 'loot' || command.startsWith('loot ')) {
+      runCommand(command.trim());            
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

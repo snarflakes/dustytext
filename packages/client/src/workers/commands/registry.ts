@@ -29,6 +29,8 @@ import { EnergizeCommand } from './energize';
 import { ProjectFieldCommand } from './projectfield';
 import { DetachProgramCommand } from './detach';
 import { SleepCommand } from './sleep';
+import { ScanCommand } from './scan';
+import { LootCommand } from './loot';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -60,6 +62,8 @@ commands.set('energize', new EnergizeCommand());
 commands.set('projectfield', new ProjectFieldCommand());
 commands.set('detach', new DetachProgramCommand());
 commands.set('sleep', new SleepCommand());
+commands.set('scan', new ScanCommand());
+commands.set('loot', new LootCommand());
 
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"

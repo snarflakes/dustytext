@@ -31,6 +31,7 @@ import { DetachProgramCommand } from './detach';
 import { SleepCommand } from './sleep';
 import { ScanCommand } from './scan';
 import { LootCommand } from './loot';
+import { ChestCommand } from './chest';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -64,6 +65,7 @@ commands.set('detach', new DetachProgramCommand());
 commands.set('sleep', new SleepCommand());
 commands.set('scan', new ScanCommand());
 commands.set('loot', new LootCommand());
+commands.set('chest', new ChestCommand());
 
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"

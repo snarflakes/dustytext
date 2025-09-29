@@ -407,6 +407,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'loot' || command.startsWith('loot ')) {
       runCommand(command.trim());            
+    } else if (command === 'chest' || command === 'look in chest') {
+      runCommand('chest');
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

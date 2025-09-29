@@ -32,6 +32,7 @@ import { SleepCommand } from './sleep';
 import { ScanCommand } from './scan';
 import { LootCommand } from './loot';
 import { ChestCommand } from './chest';
+import { DelegateCommand } from './council';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -84,6 +85,9 @@ export function getCommand(name: string): CommandHandler | undefined {
 export function registerCommand(name: string, handler: CommandHandler): void {
   commands.set(name, handler);
 }
+
+// Add after other command registrations
+commands.set('delegate', new DelegateCommand());
 
 
 

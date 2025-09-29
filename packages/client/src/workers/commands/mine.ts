@@ -182,10 +182,10 @@ export class MineCommand implements CommandHandler {
         });
 
         const targetText = coords ? ` at (${mineX}, ${mineY}, ${mineZ})` : (target === 'down' ? ' down' : (target ? ` ${target}` : ''));
-        const positionText = `(${mineX}, ${mineY}, ${mineZ})`;
+        //const positionText = `(${mineX}, ${mineY}, ${mineZ})`;
         const toolText = hasToolEquipped ? ` using ${equippedTool.type}` : '';
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `✅ Mining${targetText} completed at ${positionText}${toolText}. Tx: ${txHash}` 
+          detail: `✅ Mining${targetText} completed${toolText}. Tx: ${txHash}` 
         }));
         return;
         

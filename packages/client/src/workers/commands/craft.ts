@@ -127,7 +127,7 @@ async function queryWithRetry(sql: string, tag: string, tries = 2) {
       return await queryIndexer(sql, `${tag}${i ? `_retry${i}` : ""}`);
     } catch (e: unknown) {
       lastErr = e;
-      const msg = String(e?.message || e);
+      const msg = e instanceof Error ? e.message : String(e);
       if (!/HTTP 500|No space left on device/i.test(msg)) break;
       await new Promise((r) => setTimeout(r, 150));
     }
@@ -154,28 +154,42 @@ async function getEntityIdAt(x: number, y: number, z: number): Promise<`0x${stri
 }
 
 /**
- * Find the station entity exactly 1 block north of the player (z - 1).
+ * Find a station entity within 1 block of the player in cardinal directions + up/down.
  * Validates the type matches the required stationName.
  */
-async function getNorthStationEntityId(
+async function getNearbyStationEntityId(
   playerEntityId: `0x${string}`,
   stationName: ObjectName
 ): Promise<{ entityId: `0x${string}`; x: number; y: number; z: number } | null> {
   const pos = await getPlayerPosition(playerEntityId);
   if (!pos) return null;
 
-  const nx = pos.x;
-  const ny = pos.y;
-  const nz = pos.z - 1; // world north = z - 1 (as seen in your explore output)
+  // Check positions: north, south, east, west, down
+  const offsets = [
+    { dx: 0, dy: 0, dz: -1 }, // north
+    { dx: 0, dy: 0, dz: 1 },  // south  
+    { dx: 1, dy: 0, dz: 0 },  // east
+    { dx: -1, dy: 0, dz: 0 }, // west
+    { dx: 0, dy: -1, dz: 0 }, // down
+  ];
 
-  const entityId = await getEntityIdAt(nx, ny, nz);
-  if (!entityId) return null;
-
-  const typeId = await getEntityObjectType(entityId);
   const needId = TYPE_ID_BY_NAME[stationName];
-  if (typeId !== needId) return null;
 
-  return { entityId, x: nx, y: ny, z: nz };
+  for (const offset of offsets) {
+    const checkX = pos.x + offset.dx;
+    const checkY = pos.y + offset.dy;
+    const checkZ = pos.z + offset.dz;
+
+    const entityId = await getEntityIdAt(checkX, checkY, checkZ);
+    if (!entityId) continue;
+
+    const typeId = await getEntityObjectType(entityId);
+    if (typeId === needId) {
+      return { entityId, x: checkX, y: checkY, z: checkZ };
+    }
+  }
+
+  return null;
 }
 
 // ---------- recipe row matching ----------
@@ -374,17 +388,21 @@ export class CraftCommand implements CommandHandler {
       let data: `0x${string}`;
 
       if (stationName) {
-        // New rule: station must be exactly 1 block NORTH (z - 1)
-        const north = await getNorthStationEntityId(caller, stationName);
-        if (!north) {
-          // Show exact target tile to help the player
+        // Show roundtime message for station-based crafting
+        log("You start to search for a nearby crafting station...");
+        log("You look around carefully for the right equipment...\nRoundtime: 40 sec.");
+        
+        // New rule: station must be within 1 block in any cardinal direction + up/down
+        const nearby = await getNearbyStationEntityId(caller, stationName);
+        if (!nearby) {
+          // Show helpful message about placement
           const pos = await getPlayerPosition(caller);
           if (!pos) {
-            log(`❌ No ${formatObjectName(stationName)} north of you. Place it one block to world-north and try again.`);
+            log(`❌ No ${formatObjectName(stationName)} adjacent to you. Place it within 1 block and try again.`);
             return;
           }
           log(
-            `❌ No ${formatObjectName(stationName)} at (${pos.x}, ${pos.y}, ${pos.z - 1}). Place it exactly 1 block north and try again.`
+            `❌ No ${formatObjectName(stationName)} found adjacent to you. Place it at your level, exactly 1 block away (north/south/east/west/down) and try again.`
           );
           return;
         }
@@ -394,7 +412,7 @@ export class CraftCommand implements CommandHandler {
           functionName: "craftWithStation",
           args: [
             caller,
-            north.entityId as `0x${string}`,
+            nearby.entityId as `0x${string}`,
             recipeId as `0x${string}`,
             inputSlots.map((it) => ({ slot: it.slot, amount: it.amount }) as const),
           ],

@@ -38,6 +38,9 @@ export class HelpCommand implements CommandHandler {
       '       [Loot] collect items at your feet, or at a specific coordinate, loot x y z,',            
       '  [RegisterAI] configure AI assistant settings for AI mode,',
       '  [CustomAI] add custom instructions to future AI prompts, movement directions, personality,',
+      '  [Council] address or council clear,delegate your dustforgeaccount to another address, or clear delegation,',
+      '  [ClaimField] claim ownership of a force field station, or the one beneath you, claimfield x y z, or claimfield,',
+
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',
       '  System: help/h, clear, balance/bal, players/who,',
       '  Debug: debug/d',

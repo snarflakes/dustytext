@@ -401,6 +401,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'projectfield' || command === 'pf') {
       runCommand('projectfield');
+    } else if (command === 'claimfield' || command === 'cf' || command.startsWith('claimfield ') || command.startsWith('cf ')) {
+      runCommand(command.trim());
     } else if (command === 'sleep') {
       runCommand('sleep');
     } else if (command === 'scan' || command.startsWith('scan ')) {

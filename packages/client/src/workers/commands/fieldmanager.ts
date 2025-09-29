@@ -113,16 +113,13 @@ export class ClaimFieldCommand implements CommandHandler {
         machine = encodeBlock(coordsForLog);
       }
 
-      const myEOA  = encodePlayerEntityId(context.address);
-
       // Step 1: Ensure your EOA is trusted (collaborator) on the machine.
-      // (bytes32 caller, bytes32 machine, bytes32 grantee)
       let grantTx: `0x${string}` | null = null;
       try {
         const dataGrant = encodeFunctionData({
           abi: IWorldAbi,
           functionName: "grantAccess",
-          args: [machine, myEOA],
+          args: [machine, context.address as `0x${string}`],
         });
 
         grantTx = await context.sessionClient.sendTransaction({
@@ -131,8 +128,7 @@ export class ClaimFieldCommand implements CommandHandler {
           gas: 300_000n,
         }) as `0x${string}`;
       } catch (e) {
-        // If your world doesn’t expose grantTrust, we’ll just log and continue.
-        // You can rename to your world’s function (e.g., addCollaborator, setPermission(...,true), etc.)
+        // If your world doesn't expose grantAccess, we'll just log and continue.
       }
 
       // Step 2 (optional/best): make your EOA the owner/controller if your world supports it.
@@ -142,7 +138,7 @@ export class ClaimFieldCommand implements CommandHandler {
         const dataOwner = encodeFunctionData({
           abi: IWorldAbi,
           functionName: "transferOwnership",
-          args: [machine, myEOA],
+          args: [machine, context.address as `0x${string}`],
         });
 
         ownerTx = await context.sessionClient.sendTransaction({

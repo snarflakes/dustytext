@@ -1,4 +1,3 @@
-// claimfield.ts — ensure your EOA has control; keep ephemeral as collaborator
 import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { getForceFieldInfoForPlayer, getForceFieldInfo, ForceFieldInfo } from "./sense";
@@ -113,13 +112,18 @@ export class ClaimFieldCommand implements CommandHandler {
         machine = encodeBlock(coordsForLog);
       }
 
-      // Step 1: Ensure your EOA is trusted (collaborator) on the machine.
+      // Get the session address that's actually making transactions
+      const sessionAddress = typeof context.sessionClient.account === 'string' 
+        ? context.sessionClient.account 
+        : context.sessionClient.account.address;
+      
+      // Step 1: Ensure your session address is trusted (collaborator) on the machine.
       let grantTx: `0x${string}` | null = null;
       try {
         const dataGrant = encodeFunctionData({
           abi: IWorldAbi,
           functionName: "grantAccess",
-          args: [machine, context.address as `0x${string}`],
+          args: [machine, sessionAddress],
         });
 
         grantTx = await context.sessionClient.sendTransaction({
@@ -138,7 +142,7 @@ export class ClaimFieldCommand implements CommandHandler {
         const dataOwner = encodeFunctionData({
           abi: IWorldAbi,
           functionName: "transferOwnership",
-          args: [machine, context.address as `0x${string}`],
+          args: [machine, context.sessionClient.userAddress as `0x${string}`],
         });
 
         ownerTx = await context.sessionClient.sendTransaction({
@@ -154,16 +158,32 @@ export class ClaimFieldCommand implements CommandHandler {
         ? `machine at (${coordsForLog[0]}, ${coordsForLog[1]}, ${coordsForLog[2]})`
         : `force field station ${machine}`;
 
-      const parts: string[] = [];
-      if (grantTx) parts.push(`🤝 Granted collaborator access to your EOA. Tx: ${grantTx}`);
-      else parts.push(`ℹ️ Skipped collaborator grant (no grantAccess in ABI or already granted).`);
+      if (grantTx) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `🤝 Granted collaborator access to session account on ${targetTxt}. Tx: ${grantTx}`,
+        }));
+      } else {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `ℹ️ Skipped collaborator grant (no grantAccess in ABI or already granted).`,
+        }));
+      }
 
-      if (ownerTx) parts.push(`👑 Transferred ownership/controller to your EOA. Tx: ${ownerTx}`);
-      else parts.push(`ℹ️ Ownership transfer skipped or unsupported. You still have collaborator access.`);
+      if (ownerTx) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `👑 Transferred ownership to your EOA for backup on ${targetTxt}. Tx: ${ownerTx}`,
+        }));
+      } else {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `ℹ️ Ownership transfer skipped or unsupported.`,
+        }));
+      }
 
-      window.dispatchEvent(new CustomEvent<string>("worker-log", {
-        detail: `✅ Claim complete on ${targetTxt}\n${parts.join("\n")}`,
-      }));
+      // Summary if nothing worked
+      if (!grantTx && !ownerTx) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `⚠️ No changes made to ${targetTxt}. Both operations failed or were skipped.`,
+        }));
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
 

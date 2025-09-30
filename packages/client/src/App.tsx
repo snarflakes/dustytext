@@ -441,15 +441,31 @@ export function App() {
         
         // Check for forcefields owned by session address
         try {
-          const forceFieldInfo = await getForceFieldInfoForPlayer(sessionAddress);
-          if (forceFieldInfo.active) {
-            setLog(prev => [...prev, `  Forcefield: ACTIVE (${forceFieldInfo.forceField})`]);
+          const sessionForceFieldInfo = await getForceFieldInfoForPlayer(sessionAddress);
+          if (sessionForceFieldInfo.active) {
+            setLog(prev => [...prev, `  Session Forcefield: ACTIVE (${sessionForceFieldInfo.forceField})`]);
           } else {
-            setLog(prev => [...prev, `  Forcefield: NO forcefields owned by this session address`]);
+            setLog(prev => [...prev, `  Session Forcefield: NO forcefields owned by this session address`]);
           }
         } catch (error) {
-          setLog(prev => [...prev, `  Forcefield: NO forcefields owned by this session address`]);
+          setLog(prev => [...prev, `  Session Forcefield: NO forcefields owned by this session address`]);
         }
+      }
+      
+      // Check for forcefields owned by EOA address
+      if (address) {
+        try {
+          const eoaForceFieldInfo = await getForceFieldInfoForPlayer(address);
+          if (eoaForceFieldInfo.active) {
+            setLog(prev => [...prev, `  EOA Forcefield: ACTIVE (${eoaForceFieldInfo.forceField})`]);
+          } else {
+            setLog(prev => [...prev, `  EOA Forcefield: NO forcefields owned by this EOA address`]);
+          }
+        } catch (error) {
+          setLog(prev => [...prev, `  EOA Forcefield: NO forcefields owned by this EOA address`]);
+        }
+      } else {
+        setLog(prev => [...prev, `  EOA Forcefield: No EOA address available`]);
       }
     } else if (command === 'clear' || command === 'cls') {
       setLog([]);

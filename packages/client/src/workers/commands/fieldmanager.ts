@@ -2,6 +2,7 @@ import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
 import { getForceFieldInfoForPlayer, getForceFieldInfo, ForceFieldInfo } from "./sense";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
+import { queryIndexer } from "./queryIndexer";
 
 /* ---------------------- World / Indexer ---------------------- */
 const WORLD_ADDRESS  = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
@@ -77,9 +78,170 @@ function encodeBlock(pos: Vec3): Hex32 {
   return encodeCoord(ENTITY_TYPE_BLOCK, pos);
 }
 
+/* ---------------------- Ownership Checking ---------------------- */
+async function checkOwnership(address: string): Promise<string[]> {
+  const results: string[] = [];
+  
+  try {
+    // Use the correct table name from your screenshot
+    // Convert address to bytes32 format for the owner field
+    const ownerBytes32 = encodePlayerEntityId(address);
+    const ownershipQuery = `SELECT "groupId" FROM "AccessGroupOwner" WHERE "owner"='${ownerBytes32}'`;
+    const ownershipRows = await queryIndexer(ownershipQuery, "ownership");
+    
+    if (ownershipRows && ownershipRows.length > 0) {
+      const groups = ownershipRows.map(row => row[0] as string);
+      results.push(`  Groups Owned: ${groups.length} groups`);
+      
+      // For each group, get the entity details
+      for (const groupId of groups) {
+        results.push(`    Group: ${groupId}`);
+        
+        // Get entities in this group - using correct table name
+        const entityQuery = `SELECT "entityId" FROM "EntityAccessGrou" WHERE "groupId"='${groupId}'`;
+        const entityRows = await queryIndexer(entityQuery, "entities");
+        
+        if (entityRows && entityRows.length > 0) {
+          const entities = entityRows.map(row => row[0] as string);
+          
+          for (const entityId of entities) {
+            try {
+              const coords = decodeBlockCoordinates(entityId as Hex32);
+              results.push(`      Entity: ${entityId} at (${coords[0]}, ${coords[1]}, ${coords[2]})`);
+            } catch (e) {
+              results.push(`      Entity: ${entityId} (coordinate decode failed)`);
+            }
+          }
+        } else {
+          results.push(`      No entities found in group`);
+        }
+      }
+    } else {
+      results.push(`  Groups Owned: 0 groups (no forcefields owned)`);
+    }
+  } catch (error) {
+    results.push(`  Groups Owned: Query failed - ${error}`);
+    results.push(`  This likely means you don't own any forcefields yet`);
+  }
+  
+  return results;
+}
+
+// Helper function to decode block coordinates from entityId
+function decodeBlockCoordinates(entityId: Hex32): Vec3 {
+  const bigIntValue = BigInt(entityId);
+  const entityType = Number(bigIntValue >> ID_BITS);
+  
+  if (entityType !== ENTITY_TYPE_BLOCK) {
+    throw new Error(`Not a block entity (type: ${entityType})`);
+  }
+  
+  const data = bigIntValue & ((1n << ID_BITS) - 1n);
+  const coordData = data >> (ID_BITS - VEC3_BITS);
+  
+  const x = Number((coordData >> 64n) & 0xFFFFFFFFn);
+  const y = Number((coordData >> 32n) & 0xFFFFFFFFn);
+  const z = Number(coordData & 0xFFFFFFFFn);
+  
+  // Convert from unsigned to signed 32-bit
+  const toSigned32 = (n: number) => n > 0x7FFFFFFF ? n - 0x100000000 : n;
+  
+  return [toSigned32(x), toSigned32(y), toSigned32(z)];
+}
+
+export async function showOwnershipInfo(EOAaddress?: string): Promise<void> {
+  // Get session client and address directly
+  const sessionClient = window.__entryKitSessionClient;
+  if (!sessionClient?.sendTransaction) {
+    window.dispatchEvent(new CustomEvent<string>("worker-log", {
+      detail: `❌ Session client not available`,
+    }));
+    return;
+  }
+
+  // Get session address
+  const sessionAddress = typeof sessionClient.account === 'string' 
+    ? sessionClient.account 
+    : (sessionClient.account as any)?.address || sessionClient.account;
+
+  window.dispatchEvent(new CustomEvent<string>("worker-log", {
+    detail: `🔍 Ownership Info:`,
+  }));
+  
+  // Check session address
+  window.dispatchEvent(new CustomEvent<string>("worker-log", {
+    detail: `Session Address: ${sessionAddress}`,
+  }));
+  
+  const sessionResults = await checkOwnership(sessionAddress);
+  sessionResults.forEach(line => {
+    window.dispatchEvent(new CustomEvent<string>("worker-log", { detail: line }));
+  });
+  
+  // Check EOA address if provided
+  if (EOAaddress) {
+    window.dispatchEvent(new CustomEvent<string>("worker-log", {
+      detail: `EOA Address: ${EOAaddress}`,
+    }));
+    
+    const eoaResults = await checkOwnership(EOAaddress);
+    eoaResults.forEach(line => {
+      window.dispatchEvent(new CustomEvent<string>("worker-log", { detail: line }));
+    });
+  }
+}
+
 /* ---------------------- Command ---------------------- */
 export class ClaimFieldCommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
+    // If no args, check current location first
+    if (args.length === 0) {
+      try {
+        // Check if player is in a force field or on a machine block
+        const ff = await getForceFieldInfoForPlayer(context.address);
+        
+        if (ff.forceField === ZERO_ENTITY_ID) {
+          // No force field found, check if standing on a machine block
+          const pos = await fetchPlayerBlock(context.address);
+          if (!pos) {
+            window.dispatchEvent(new CustomEvent<string>("worker-log", {
+              detail: `❌ You float amongst the stars. Try 'spawn' first.`,
+            }));
+            return;
+          }
+          
+          const blockBeneath: Vec3 = [pos[0], pos[1] - 1, pos[2]];
+          const machine = encodeBlock(blockBeneath);
+          
+          // Check if this block has an access group (is a machine)
+          const entityQuery = `SELECT "groupId" FROM "EntityAccessGrou" WHERE "entityId"='${machine}'`;
+          const entityRes = await fetch(INDEXER_URL, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify([{ address: WORLD_ADDRESS, query: entityQuery }]),
+          });
+          
+          const entityJson = await entityRes.json();
+          const entityRows = entityJson?.result?.[0];
+          
+          if (!Array.isArray(entityRows) || entityRows.length < 2) {
+            window.dispatchEvent(new CustomEvent<string>("worker-log", {
+              detail: `❌ Your session address doesn't don't own a forcefield, you aren't standing in a forcefield, and you are not standing on a machine block. No changes made.`,
+            }));
+            return;
+          }
+        }
+        
+        // If we get here, there's either a force field or a machine block to claim
+        // Continue with the claiming logic...
+      } catch (error) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `❌ Error checking location: ${error}. No changes made.`,
+        }));
+        return;
+      }
+    }
+    
     try {
       // Parse coordinates if provided: "claimfield x y z"
       let targetPos: Vec3 | null = null;
@@ -117,73 +279,100 @@ export class ClaimFieldCommand implements CommandHandler {
         ? context.sessionClient.account 
         : context.sessionClient.account.address;
       
-      // Step 1: Ensure your session address is trusted (collaborator) on the machine.
-      let grantTx: `0x${string}` | null = null;
-      try {
-        const dataGrant = encodeFunctionData({
-          abi: IWorldAbi,
-          functionName: "grantAccess",
-          args: [machine, sessionAddress],
-        });
-
-        grantTx = await context.sessionClient.sendTransaction({
-          to: WORLD_ADDRESS,
-          data: dataGrant,
-          gas: 300_000n,
-        }) as `0x${string}`;
-      } catch (e) {
-        // If your world doesn't expose grantAccess, we'll just log and continue.
+      // First, get the groupId for this machine entity
+      const entityQuery = `SELECT "groupId" FROM "EntityAccessGrou" WHERE "entityId"='${machine}'`;
+      const entityRes = await fetch(INDEXER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([{ address: WORLD_ADDRESS, query: entityQuery }]),
+      });
+      
+      if (!entityRes.ok) {
+        throw new Error("Failed to query entity access group");
       }
-
-      // Step 2 (optional/best): make your EOA the owner/controller if your world supports it.
-      // (bytes32 caller, bytes32 machine, bytes32 newOwner)
-      let ownerTx: `0x${string}` | null = null;
-      try {
-        const dataOwner = encodeFunctionData({
-          abi: IWorldAbi,
-          functionName: "transferOwnership",
-          args: [machine, context.sessionClient.userAddress as `0x${string}`],
-        });
-
-        ownerTx = await context.sessionClient.sendTransaction({
-          to: WORLD_ADDRESS,
-          data: dataOwner,
-          gas: 300_000n,
-        }) as `0x${string}`;
-      } catch (e) {
-        // It's okay if setOwner doesn't exist; you still keep access via trust.
+      
+      const entityJson = await entityRes.json();
+      const entityRows = entityJson?.result?.[0];
+      if (!Array.isArray(entityRows) || entityRows.length < 2) {
+        throw new Error("No access group found for this entity");
       }
+      
+      const [, ...entityValues] = entityRows;
+      const groupId = entityValues[0] as string;
+
+      // DefaultProgramSy system ID in dfprograms_1 namespace
+      const DEFAULT_PROGRAM_SYSTEM_ID = "0x737964666070726f6772616d73000000044656661756c7450726f6772616d5379" as const;
+
+      // Step 1: Add session address as member
+      const setMembershipCallData = encodeFunctionData({
+        abi: [{
+          type: "function",
+          name: "setMembership",
+          inputs: [
+            { name: "groupId", type: "bytes32" },
+            { name: "member", type: "address" },
+            { name: "isMember", type: "bool" }
+          ],
+          outputs: [],
+          stateMutability: "nonpayable"
+        }],
+        functionName: "setMembership",
+        args: [groupId as `0x${string}`, sessionAddress, true],
+      });
+
+      const dataSession = encodeFunctionData({
+        abi: IWorldAbi,
+        functionName: "call",
+        args: [DEFAULT_PROGRAM_SYSTEM_ID, setMembershipCallData],
+      });
+
+      const sessionTx = await context.sessionClient.sendTransaction({
+        to: WORLD_ADDRESS,
+        data: dataSession,
+        gas: 300_000n,
+      }) as `0x${string}`;
+
+      // Step 2: Add EOA address as member
+      const setMembershipCallDataEOA = encodeFunctionData({
+        abi: [{
+          type: "function",
+          name: "setMembership",
+          inputs: [
+            { name: "groupId", type: "bytes32" },
+            { name: "member", type: "address" },
+            { name: "isMember", type: "bool" }
+          ],
+          outputs: [],
+          stateMutability: "nonpayable"
+        }],
+        functionName: "setMembership",
+        args: [groupId as `0x${string}`, context.address as `0x${string}`, true],
+      });
+
+      const dataEOA = encodeFunctionData({
+        abi: IWorldAbi,
+        functionName: "call",
+        args: [DEFAULT_PROGRAM_SYSTEM_ID, setMembershipCallDataEOA],
+      });
+
+      const eoaTx = await context.sessionClient.sendTransaction({
+        to: WORLD_ADDRESS,
+        data: dataEOA,
+        gas: 300_000n,
+      }) as `0x${string}`;
 
       const targetTxt = coordsForLog
         ? `machine at (${coordsForLog[0]}, ${coordsForLog[1]}, ${coordsForLog[2]})`
         : `force field station ${machine}`;
 
-      if (grantTx) {
-        window.dispatchEvent(new CustomEvent<string>("worker-log", {
-          detail: `🤝 Granted collaborator access to session account on ${targetTxt}. Tx: ${grantTx}`,
-        }));
-      } else {
-        window.dispatchEvent(new CustomEvent<string>("worker-log", {
-          detail: `ℹ️ Skipped collaborator grant (no grantAccess in ABI or already granted).`,
-        }));
-      }
+      window.dispatchEvent(new CustomEvent<string>("worker-log", {
+        detail: `🤝 Added session address as member to ${targetTxt} (group ${groupId}). Tx: ${sessionTx}`,
+      }));
 
-      if (ownerTx) {
-        window.dispatchEvent(new CustomEvent<string>("worker-log", {
-          detail: `👑 Transferred ownership to your EOA for backup on ${targetTxt}. Tx: ${ownerTx}`,
-        }));
-      } else {
-        window.dispatchEvent(new CustomEvent<string>("worker-log", {
-          detail: `ℹ️ Ownership transfer skipped or unsupported.`,
-        }));
-      }
+      window.dispatchEvent(new CustomEvent<string>("worker-log", {
+        detail: `👑 Added EOA address as member to ${targetTxt} (group ${groupId}). Tx: ${eoaTx}`,
+      }));
 
-      // Summary if nothing worked
-      if (!grantTx && !ownerTx) {
-        window.dispatchEvent(new CustomEvent<string>("worker-log", {
-          detail: `⚠️ No changes made to ${targetTxt}. Both operations failed or were skipped.`,
-        }));
-      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
 
@@ -199,7 +388,7 @@ export class ClaimFieldCommand implements CommandHandler {
       }
       if (msg.includes("Target is not a smart entity")) {
         window.dispatchEvent(new CustomEvent("worker-log", {
-          detail: "❌ The block beneath you isn’t a smart entity. Stand on your force-field station."
+          detail: "❌ The block beneath you isn't a smart entity. Stand on your force-field station."
         }));
         return;
       }

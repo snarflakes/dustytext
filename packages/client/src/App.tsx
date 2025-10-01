@@ -13,7 +13,6 @@ import { getAIConfig } from "./workers/commands/registerAI";
 import { setAIActive } from "./workers/ai/runtime";
 import { appendAILog } from "./workers/ai/runtime";
 import { getEquippedToolName } from "./workers/commands/equip";
-import { getForceFieldInfoForPlayer } from './workers/commands/sense';
 
 declare global {
   interface Window {
@@ -438,35 +437,11 @@ export function App() {
           ? sessionClient.account 
           : sessionClient.account.address;
         setLog(prev => [...prev, `  Session Address: ${sessionAddress}`]);
-        
-        // Check for forcefields owned by session address
-        try {
-          const sessionForceFieldInfo = await getForceFieldInfoForPlayer(sessionAddress);
-          if (sessionForceFieldInfo.active) {
-            setLog(prev => [...prev, `  Session Forcefield: ACTIVE (${sessionForceFieldInfo.forceField})`]);
-          } else {
-            setLog(prev => [...prev, `  Session Forcefield: NO forcefields owned by this session address`]);
-          }
-        } catch (error) {
-          setLog(prev => [...prev, `  Session Forcefield: NO forcefields owned by this session address`]);
-        }
       }
       
-      // Check for forcefields owned by EOA address
-      if (address) {
-        try {
-          const eoaForceFieldInfo = await getForceFieldInfoForPlayer(address);
-          if (eoaForceFieldInfo.active) {
-            setLog(prev => [...prev, `  EOA Forcefield: ACTIVE (${eoaForceFieldInfo.forceField})`]);
-          } else {
-            setLog(prev => [...prev, `  EOA Forcefield: NO forcefields owned by this EOA address`]);
-          }
-        } catch (error) {
-          setLog(prev => [...prev, `  EOA Forcefield: NO forcefields owned by this EOA address`]);
-        }
-      } else {
-        setLog(prev => [...prev, `  EOA Forcefield: No EOA address available`]);
-      }
+      // Use fieldmanager's ownership checking
+      const { showOwnershipInfo } = await import('./workers/commands/fieldmanager');
+      await showOwnershipInfo(address);
     } else if (command === 'clear' || command === 'cls') {
       setLog([]);
     } else if (command.startsWith('attach ')) {

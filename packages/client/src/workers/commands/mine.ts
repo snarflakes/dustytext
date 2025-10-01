@@ -1,6 +1,6 @@
 import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
-import { coordToChunkCoord, chunkCommit, packCoord96 } from './chunkCommit';
+import { coordToChunkCoord, initChunkCommit, packCoord96 } from './chunkCommit';
 import { addToQueue, queueSizeByAction } from "../../commandQueue"; // path as needed
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords"; // your helper
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
@@ -149,7 +149,7 @@ export class MineCommand implements CommandHandler {
         for (const chunkKey of chunksToCommit) {
           const [cx, cy, cz] = chunkKey.split(',').map(Number);
           try {
-            const chunkTxHash = await chunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
+            const chunkTxHash = await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
             console.log(`Mine command - chunk commit (${cx},${cy},${cz}):`, chunkTxHash);
           } catch (chunkError) {
             const chunkErrorMessage = String(chunkError);

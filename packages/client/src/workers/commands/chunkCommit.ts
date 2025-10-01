@@ -17,7 +17,7 @@ export function packCoord96(x: number, y: number, z: number): bigint {
   return (ux << 64n) | (uy << 32n) | uz;
 }
 
-export async function chunkCommit(
+export async function initChunkCommit(
   sessionClient: { sendTransaction: (args: { to: `0x${string}`, data: `0x${string}`, gas: bigint }) => Promise<string> },
   worldAddress: `0x${string}`,
   callerEntityId: `0x${string}`,
@@ -27,7 +27,7 @@ export async function chunkCommit(
   const chunkPacked = packCoord96(cx, cy, cz);
   const data = encodeFunctionData({
     abi: IWorldAbi,
-    functionName: 'chunkCommit',
+    functionName: 'initChunkCommit',
     args: [callerEntityId, chunkPacked],
   });
   
@@ -44,6 +44,17 @@ export async function chunkCommit(
     }
     throw error;
   }
+}
+
+// Keep the old function for backward compatibility if needed
+export async function chunkCommit(
+  sessionClient: { sendTransaction: (args: { to: `0x${string}`, data: `0x${string}`, gas: bigint }) => Promise<string> },
+  worldAddress: `0x${string}`,
+  callerEntityId: `0x${string}`,
+  cx: number, cy: number, cz: number,
+  gas: bigint = 150000n
+) {
+  return initChunkCommit(sessionClient, worldAddress, callerEntityId, cx, cy, cz, gas);
 }
 
 

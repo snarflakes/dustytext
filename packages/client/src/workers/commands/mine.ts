@@ -1,6 +1,6 @@
 import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
-import { coordToChunkCoord, initChunkCommit, packCoord96 } from './chunkCommit';
+import { coordToChunkCoord, initChunkCommit, packCoord96, fulfillChunkCommit, getFutureRound } from './chunkCommit';
 import { addToQueue, queueSizeByAction } from "../../commandQueue"; // path as needed
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords"; // your helper
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
@@ -146,17 +146,48 @@ export class MineCommand implements CommandHandler {
         
         console.log(`Mine command - committing ${chunksToCommit.size} essential chunks`);
         
+        // Store committed rounds for each chunk
+        const chunkCommitments = new Map<string, bigint>();
+        
+        // First: init all chunks and store their committed rounds
         for (const chunkKey of chunksToCommit) {
           const [cx, cy, cz] = chunkKey.split(',').map(Number);
           try {
-            const chunkTxHash = await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
-            console.log(`Mine command - chunk commit (${cx},${cy},${cz}):`, chunkTxHash);
+            console.log(`Mine command - starting chunk commit (${cx},${cy},${cz})`);
+            
+            const initTxHash = await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
+            console.log(`Mine command - init done:`, initTxHash);
+            
+            // Get the committed round (we need to track this for fulfill)
+            const futureRound = await getFutureRound(); // You'll need to export this from chunkCommit.ts
+            chunkCommitments.set(chunkKey, futureRound);
+            
           } catch (chunkError) {
             const chunkErrorMessage = String(chunkError);
             if (!chunkErrorMessage.includes('Existing chunk commitment')) {
               throw chunkError;
             }
             console.log(`Mine command - chunk (${cx},${cy},${cz}) already committed`);
+          }
+        }
+        
+        // Wait for the committed rounds to be available (1 minute)
+        console.log('Mine command - waiting for drand rounds to be available...');
+        await new Promise(resolve => setTimeout(resolve, 65000)); // 65 seconds to be safe
+        
+        // Then: fulfill all chunks with their specific committed rounds
+        for (const chunkKey of chunksToCommit) {
+          const [cx, cy, cz] = chunkKey.split(',').map(Number);
+          const committedRound = chunkCommitments.get(chunkKey);
+          
+          if (committedRound) {
+            try {
+              const fulfillTxHash = await fulfillChunkCommit(context.sessionClient, WORLD_ADDRESS, cx, cy, cz, committedRound);
+              console.log(`Mine command - fulfill done:`, fulfillTxHash);
+            } catch (chunkError) {
+              console.log(`Mine command - fulfill failed for chunk (${cx},${cy},${cz}):`, chunkError);
+              throw chunkError;
+            }
           }
         }
 

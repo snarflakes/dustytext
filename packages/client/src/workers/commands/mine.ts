@@ -319,6 +319,23 @@ export class MineCommand implements CommandHandler {
           return;
         }
         
+        // Check for "Not yet fulfillable" error
+        if (errorMessage.includes('Not yet fulfillable') || 
+            errorMessage.includes('4e6f74207965742066756c66696c6c61626c6500000000000000000000000000')) {
+          if (attempt < maxRetries) {
+            window.dispatchEvent(new CustomEvent("worker-log", { 
+              detail: `⏳ Chunk not yet fulfillable, retrying... (${attempt}/${maxRetries})` 
+            }));
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Wait longer
+            continue;
+          } else {
+            window.dispatchEvent(new CustomEvent("worker-log", { 
+              detail: `❌ Mining failed: Chunk not yet fulfillable after retries.` 
+            }));
+            return;
+          }
+        }
+        
         if (attempt === maxRetries) {
           window.dispatchEvent(new CustomEvent("worker-log", { 
             detail: `❌ Mine failed after ${maxRetries} attempts: ${error}` 

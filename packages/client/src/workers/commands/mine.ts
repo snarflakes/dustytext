@@ -1,6 +1,6 @@
 import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
-import { coordToChunkCoord, initChunkCommit, packCoord96, fulfillChunkCommit, getFutureRound } from './chunkCommit';
+import { coordToChunkCoord, initChunkCommit, packCoord96, fulfillChunkCommit, getCurrentRound } from './chunkCommit';
 import { addToQueue, queueSizeByAction } from "../../commandQueue"; // path as needed
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords"; // your helper
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
@@ -158,9 +158,9 @@ export class MineCommand implements CommandHandler {
             const initTxHash = await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
             console.log(`Mine command - init done:`, initTxHash);
             
-            // Get the committed round (we need to track this for fulfill)
-            const futureRound = await getFutureRound(); // You'll need to export this from chunkCommit.ts
-            chunkCommitments.set(chunkKey, futureRound);
+            // Get the current round for v2 system
+            const currentRound = await getCurrentRound();
+            chunkCommitments.set(chunkKey, currentRound);
             
           } catch (chunkError) {
             const chunkErrorMessage = String(chunkError);
@@ -171,9 +171,9 @@ export class MineCommand implements CommandHandler {
           }
         }
         
-        // Wait for the committed rounds to be available (1 minute)
+        // Wait for the committed rounds to be available (shorter wait for v2)
         console.log('Mine command - waiting for drand rounds to be available...');
-        await new Promise(resolve => setTimeout(resolve, 65000)); // 65 seconds to be safe
+        await new Promise(resolve => setTimeout(resolve, 10000)); // 10 seconds instead of 65
         
         // Then: fulfill all chunks with their specific committed rounds
         for (const chunkKey of chunksToCommit) {

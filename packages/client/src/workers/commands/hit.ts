@@ -1,7 +1,7 @@
 
 import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
-import { coordToChunkCoord, chunkCommit } from './chunkCommit';
+import { coordToChunkCoord, initChunkCommit, fulfillChunkCommit } from './chunkCommit';
 import { addToQueue, queueSizeByAction } from "../../commandQueue";
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
@@ -212,7 +212,8 @@ export class HitCommand implements CommandHandler {
         for (const chunkKey of chunksToCommit) {
           const [cx, cy, cz] = chunkKey.split(',').map(Number);
           try {
-            await chunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
+            await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
+            // Wait and then fulfill - you'll need to implement the same pattern as mine.ts
           } catch (chunkError) {
             const chunkErrorMessage = String(chunkError);
             if (!chunkErrorMessage.includes('Existing chunk commitment')) {

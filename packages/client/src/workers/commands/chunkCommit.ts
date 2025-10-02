@@ -24,20 +24,15 @@ export function packCoord96(x: number, y: number, z: number): bigint {
   return (ux << 64n) | (uy << 32n) | uz;
 }
 
-export async function getFutureRound(): Promise<bigint> {
+export async function getCurrentRound(): Promise<bigint> {
   try {
-    // Get current round
     const response = await fetch('https://api.drand.sh/v2/beacons/evmnet/rounds/latest');
     const data: DrandResponse = await response.json();
-    
-    // Calculate round that will be available in 1 minute (2 rounds ahead)
-    const futureRound = data.round + 2;
-    return BigInt(futureRound);
+    return BigInt(data.round);
   } catch (error) {
-    console.warn('Failed to fetch current drand round, using estimated:', error);
-    // Fallback: estimate based on current time
+    console.warn('Failed to fetch current drand round:', error);
     const now = Date.now();
-    const estimatedRound = Math.floor(now / DRAND_ROUND_INTERVAL) + 2;
+    const estimatedRound = Math.floor(now / DRAND_ROUND_INTERVAL);
     return BigInt(estimatedRound);
   }
 }
@@ -50,12 +45,11 @@ export async function initChunkCommit(
   gas: bigint = 150000n
 ) {
   const chunkPacked = packCoord96(cx, cy, cz);
-  const futureRound = await getFutureRound();
   
   const data = encodeFunctionData({
     abi: IWorldAbi,
     functionName: 'initChunkCommit',
-    args: [callerEntityId, chunkPacked, futureRound],
+    args: [callerEntityId, chunkPacked],
   });
   
   try {
@@ -72,25 +66,53 @@ export async function initChunkCommit(
 }
 
 async function fetchDrandDataForRound(roundNumber: bigint): Promise<{ signature: [bigint, bigint], roundNumber: bigint }> {
-  try {
-    const response = await fetch(`https://api.drand.sh/v2/beacons/evmnet/rounds/${roundNumber}`);
-    const data: DrandResponse = await response.json();
-    
-    const sigHex = data.signature;
-    const sig1 = BigInt('0x' + sigHex.slice(0, 64));
-    const sig2 = BigInt('0x' + sigHex.slice(64, 128));
-    
-    return {
-      signature: [sig1, sig2],
-      roundNumber: BigInt(data.round)
-    };
-  } catch (error) {
-    console.warn(`Failed to fetch drand data for round ${roundNumber}:`, error);
-    return {
-      signature: [0n, 0n],
-      roundNumber: roundNumber
-    };
+  const maxRetries = 3;
+  
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Fetching drand data for round ${roundNumber}, attempt ${attempt}/${maxRetries}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(`https://api.drand.sh/v2/beacons/evmnet/rounds/${roundNumber}`, {
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const data: DrandResponse = await response.json();
+      
+      const sigHex = data.signature;
+      const sig1 = BigInt('0x' + sigHex.slice(0, 64));
+      const sig2 = BigInt('0x' + sigHex.slice(64, 128));
+      
+      return {
+        signature: [sig1, sig2],
+        roundNumber: BigInt(data.round)
+      };
+    } catch (error) {
+      console.warn(`Attempt ${attempt} failed for round ${roundNumber}:`, error);
+      
+      if (attempt === maxRetries) {
+        console.warn(`All attempts failed for round ${roundNumber}, using fallback`);
+        return {
+          signature: [0n, 0n],
+          roundNumber: roundNumber
+        };
+      }
+      
+      // Wait before retry
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
   }
+  
+  // This should never be reached, but TypeScript needs it
+  throw new Error('Unexpected error in fetchDrandDataForRound');
 }
 
 export async function fulfillChunkCommit(
@@ -101,6 +123,18 @@ export async function fulfillChunkCommit(
   gas: bigint = 150000n
 ) {
   const chunkPacked = packCoord96(cx, cy, cz);
+  
+  // Check if the round is reasonable
+  try {
+    const currentRound = await getCurrentRound();
+    console.log(`Current round: ${currentRound}, trying to fetch: ${committedRound}`);
+    
+    if (committedRound > currentRound + 10n) {
+      console.warn(`Round ${committedRound} seems too far in the future (current: ${currentRound})`);
+    }
+  } catch (e) {
+    console.warn('Could not check current round:', e);
+  }
   
   // Fetch drand data for the specific committed round
   const drandData = await fetchDrandDataForRound(committedRound);

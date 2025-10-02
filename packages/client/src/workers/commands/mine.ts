@@ -1,8 +1,8 @@
 import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
-import { coordToChunkCoord, chunkCommit, packCoord96 } from './chunkCommit';
-import { addToQueue, queueSizeByAction } from "../../commandQueue"; // path as needed
-import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords"; // your helper
+import { coordToChunkCoord, initChunkCommit, packCoord96, fulfillChunkCommit, getCurrentRound } from './chunkCommit';
+import { addToQueue, queueSizeByAction } from "../../commandQueue";
+import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
@@ -49,6 +49,22 @@ async function mineWithOptionalTool(
   }
   
   return sessionClient.sendTransaction({ to: worldAddress, data, gas });
+}
+
+// Add these helper functions
+
+async function waitForRoundAvailable(round: bigint, timeoutMs = 90000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const r = await fetch(`https://api.drand.sh/v2/beacons/evmnet/rounds/${round}`);
+      if (r.ok) return;
+    } catch {
+      // Ignore fetch errors and continue polling
+    }
+    await new Promise(res => setTimeout(res, 1500));
+  }
+  throw new Error(`Timed out waiting for drand round ${round} to be available`);
 }
 
 export class MineCommand implements CommandHandler {
@@ -135,30 +151,68 @@ export class MineCommand implements CommandHandler {
           mineZ = z;
         }
 
-        // Only commit chunks for player position and mining position
-        const playerPos = coords ? await this.getPlayerPosition(entityId) : { x: mineX, y: mineY, z: mineZ };
-        const playerChunk = coordToChunkCoord(playerPos.x, playerPos.y, playerPos.z);
+        // Only commit chunks for mining position
         const mineChunk = coordToChunkCoord(mineX, mineY, mineZ);
         
         const chunksToCommit = new Set<string>();
-        chunksToCommit.add(`${playerChunk.cx},${playerChunk.cy},${playerChunk.cz}`);
         chunksToCommit.add(`${mineChunk.cx},${mineChunk.cy},${mineChunk.cz}`);
         
-        console.log(`Mine command - committing ${chunksToCommit.size} essential chunks`);
-        
+        // --- INIT all chunks first ---
         for (const chunkKey of chunksToCommit) {
           const [cx, cy, cz] = chunkKey.split(',').map(Number);
           try {
-            const chunkTxHash = await chunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
-            console.log(`Mine command - chunk commit (${cx},${cy},${cz}):`, chunkTxHash);
-          } catch (chunkError) {
-            const chunkErrorMessage = String(chunkError);
-            if (!chunkErrorMessage.includes('Existing chunk commitment')) {
-              throw chunkError;
-            }
+            console.log(`Mine command - init chunk commit (${cx},${cy},${cz})`);
+            const initTxHash = await initChunkCommit(
+              context.sessionClient,
+              WORLD_ADDRESS,
+              entityId,
+              cx, cy, cz
+            );
+            console.log(`Mine command - init done:`, initTxHash);
+          } catch (e) {
+            const msg = String(e);
+            if (!msg.includes('Existing chunk commitment')) throw e;
             console.log(`Mine command - chunk (${cx},${cy},${cz}) already committed`);
           }
         }
+
+        // --- WAIT for next available round (any round within 2 minutes) ---
+        const currentRound = await getCurrentRound();
+        const nextRound = currentRound + 1n;
+        console.log(`Mine command - waiting for any round >= ${nextRound} to be available...`);
+        await waitForRoundAvailable(nextRound);
+
+        // --- FULFILL all chunks with the same round ---
+        const fulfilledChunks = new Set<string>();
+        for (const chunkKey of chunksToCommit) {
+          if (fulfilledChunks.has(chunkKey)) {
+            console.log(`Mine command - chunk ${chunkKey} already fulfilled in this batch, skipping...`);
+            continue;
+          }
+          
+          const [cx, cy, cz] = chunkKey.split(',').map(Number);
+          try {
+            const fulfillTxHash = await fulfillChunkCommit(
+              context.sessionClient,
+              WORLD_ADDRESS,
+              cx, cy, cz,
+              nextRound
+            );
+            console.log(`Mine command - fulfill done:`, fulfillTxHash);
+            fulfilledChunks.add(chunkKey);
+          } catch (e) {
+            const errorMessage = String(e);
+            if (errorMessage.includes('Chunk already fulfilled') ||
+                errorMessage.includes('4368756e6b20616c72656164792066756c66696c6c6564')) {
+              console.log(`Mine command - chunk (${cx},${cy},${cz}) already fulfilled, skipping...`);
+              fulfilledChunks.add(chunkKey);
+              continue;
+            }
+            throw e;
+          }
+        }
+
+        // Remove all the player position recalculation code
 
         const packedCoord = packCoord96(mineX, mineY, mineZ);
 
@@ -293,48 +347,3 @@ export class MineCommand implements CommandHandler {
     return { x: Number(pos.x ?? 0), y: Number(pos.y ?? 0), z: Number(pos.z ?? 0) };
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

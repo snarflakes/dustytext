@@ -292,19 +292,31 @@ export class MineCommand implements CommandHandler {
           return;
         }
 
+        // Check for "Not allowed to mine here" error
+        if (errorMessage.includes('4e6f7420616c6c6f77656420746f206d696e6520686572650000000000000000') ||
+            errorMessage.includes('Not allowed to mine here')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `🚫 You are not allowed to mine in this location. This area may be protected or restricted.` 
+          }));
+          return;
+        }
+
+        // Check for chunk commitment expired - add better recovery
         if (errorMessage.includes('Chunk commitment expired') || 
             errorMessage.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000') ||
             errorMessage.includes('Not within commitment blocks') ||
             errorMessage.includes('4e6f742077697468696e20636f6d6d69746d656e7420626c6f636b7300000000')) {
+          
           if (attempt < maxRetries) {
             window.dispatchEvent(new CustomEvent("worker-log", { 
               detail: `⏳ Chunk data expired, retrying... (${attempt}/${maxRetries})` 
             }));
-            await new Promise(resolve => setTimeout(resolve, 2000));
+            // Wait longer between retries to allow blockchain state to settle
+            await new Promise(resolve => setTimeout(resolve, 5000 + (attempt * 2000)));
             continue;
           } else {
             window.dispatchEvent(new CustomEvent("worker-log", { 
-              detail: `❌ Mining failed: Chunk data expired after retries.` 
+              detail: `❌ Mining failed: Chunk data expired after retries. Try again in a few moments.` 
             }));
             return;
           }
@@ -317,6 +329,23 @@ export class MineCommand implements CommandHandler {
             detail: `🛡️ This area is protected by a force field and you're not on the approved list. You need permission from the field owner to mine here.` 
           }));
           return;
+        }
+        
+        // Check for "Not yet fulfillable" error
+        if (errorMessage.includes('Not yet fulfillable') || 
+            errorMessage.includes('4e6f74207965742066756c66696c6c61626c6500000000000000000000000000')) {
+          if (attempt < maxRetries) {
+            window.dispatchEvent(new CustomEvent("worker-log", { 
+              detail: `⏳ Chunk not yet fulfillable, retrying... (${attempt}/${maxRetries})` 
+            }));
+            await new Promise(resolve => setTimeout(resolve, 3000)); // Wait longer
+            continue;
+          } else {
+            window.dispatchEvent(new CustomEvent("worker-log", { 
+              detail: `❌ Mining failed: Chunk not yet fulfillable after retries.` 
+            }));
+            return;
+          }
         }
         
         if (attempt === maxRetries) {

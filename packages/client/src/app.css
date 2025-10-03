@@ -345,7 +345,13 @@ button[data-testid*="connect"]:hover {
   50%     { transform: scale(1.15) rotate(20deg); opacity: 1; }
 }
 
+.clickable-block.passable-vegetation {
+  color: #8B7355 !important; /* Light beige color */
+  background-color: rgba(139, 115, 85, 0.1) !important;
+}
 
-
-
+.clickable-block.passable-vegetation:hover {
+  color: #6B5635 !important;
+  background-color: rgba(139, 115, 85, 0.2) !important;
+}
 

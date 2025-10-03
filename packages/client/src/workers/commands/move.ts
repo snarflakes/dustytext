@@ -377,6 +377,15 @@ export class MoveCommand implements CommandHandler {
           return;
         }
         
+        // Check for jump limit error
+        if (errorMessage.includes('Cannot jump more than 3 blocks') ||
+            errorMessage.includes('43616e6e6f74206a756d70206d6f7265207468616e203320626c6f636b730000')) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ Cannot jump more than 3 blocks in a single move. Try breaking up your movement or find a different path.` 
+          }));
+          return;
+        }
+        
         // Generic error message
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `❌ Move failed: ${error}` 

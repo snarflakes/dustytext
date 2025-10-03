@@ -48,7 +48,7 @@ export function App() {
 
   const [log, setLog] = useState<string[]>([
     "<i>Welcome to Dusty Text</i>",
-    "Type 'spawn' to enter the world! Type 'look' to see your surroundings. Type 'help' for all available commands."
+    "Type 'spawn' to enter the world! Type 'look' to see your surroundings. Find wood, craft planks and then a workbench! Type 'help' for all available commands."
   ]);
   const [input, setInput] = useState('');
   const [history, setHistory] = useState<string[]>([]);

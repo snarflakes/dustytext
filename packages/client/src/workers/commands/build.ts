@@ -178,6 +178,16 @@ export class BuildCommand implements CommandHandler {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ Cannot plant seeds on this block type. Seeds need to be planted on farmland ('till'ed dirt) that has been watered by a water bucket."
         }));
+      } else if (errorMessage.includes("Cannot build on a movable entity") ||
+                 errorMessage.includes("43616e6e6f74206275696c64206f6e2061206d6f7661626c6520656e74697479")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ Cannot build on a movable entity. Try targeting a different location away from players/mobs."
+        }));
+      } else if (errorMessage.includes("Blueprint not set for coord") ||
+                 errorMessage.includes("426c75657072696e74206e6f742073657420666f7220636f6f72640000000000")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ No blueprint set for this location. The forcefield owner needs to create a build plan here first before blocks can be placed."
+        }));
       } else {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: `❌ Build failed: ${errorMessage}`

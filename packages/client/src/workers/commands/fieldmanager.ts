@@ -193,7 +193,7 @@ export async function showOwnershipInfo(EOAaddress?: string): Promise<void> {
     : (sessionClient.account as any)?.address || sessionClient.account;
 
   window.dispatchEvent(new CustomEvent<string>("worker-log", {
-    detail: `<a href="https://explorer.mud.dev/redstone/worlds/0x253eb85B3C953bFE3827CC14a151262482E7189C/interact?expanded=dfprograms_1%2C0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379#0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379-0x8ff8e1a737b51f40f0ae94887be459cc8f46449901826a6fe0516fe6bd14fead" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; font-weight: bold; font-style: italic;"><b><i><u>🔍 Forcefield Ownership Info:</u></i></b></a>`,
+    detail: `🔍 Forcefield Ownership Info: <a href="https://explorer.mud.dev/redstone/worlds/0x253eb85B3C953bFE3827CC14a151262482E7189C/interact?expanded=dfprograms_1%2C0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379#0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379-0x8ff8e1a737b51f40f0ae94887be459cc8f46449901826a6fe0516fe6bd14fead" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; font-weight: bold; font-style: italic;"><b><i><u>Update Here</u></i></b></a>`,
   }));
   
   // Check session address

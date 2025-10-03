@@ -535,7 +535,14 @@ export function App() {
             
             {isConnected && balanceData && (
               <div className="text-sm">
-                💰 {parseFloat(formatUnits(balanceData.value, 18)).toFixed(5)} ETH
+                💰 <a 
+                  href="https://relay.link/bridge/redstone" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="underline hover:text-green-400 transition-colors"
+                >
+                  {parseFloat(formatUnits(balanceData.value, 18)).toFixed(5)} ETH
+                </a>
               </div>
             )}
             <img 

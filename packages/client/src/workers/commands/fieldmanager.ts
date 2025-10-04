@@ -83,31 +83,59 @@ async function checkOwnership(address: string): Promise<string[]> {
   const results: string[] = [];
   
   try {
-    // Use the correct table name from your screenshot
-    // Convert address to bytes32 format for the owner field
+    // Use the correct table name with namespace prefix
     const ownerBytes32 = encodePlayerEntityId(address);
-    const ownershipQuery = `SELECT "groupId" FROM "AccessGroupOwner" WHERE "owner"='${ownerBytes32}'`;
+    const ownershipQuery = `SELECT "groupId" FROM "dfprograms_1__AccessGroupOwner" WHERE "owner"='${ownerBytes32}'`;
     const ownershipRows = await queryIndexer(ownershipQuery, "ownership");
     
-    if (ownershipRows && ownershipRows.length > 0) {
-      const groups = ownershipRows.map(row => row[0] as string);
+    if (ownershipRows && ownershipRows.length > 1) { // Skip header row
+      const groups = ownershipRows.slice(1).map(row => row[0] as string); // Skip first row (headers)
       results.push(`  Groups Owned: ${groups.length} groups`);
       
       // For each group, get the entity details
       for (const groupId of groups) {
         results.push(`    Group: ${groupId}`);
         
-        // Get entities in this group - using correct table name
-        const entityQuery = `SELECT "entityId" FROM "EntityAccessGrou" WHERE "groupId"='${groupId}'`;
+        // Get members with access to this group
+        const memberQuery = `SELECT "member", "hasAccess" FROM "dfprograms_1__AccessGroupMembe" WHERE "groupId"='${groupId}' AND "hasAccess"=true`;
+        const memberRows = await queryIndexer(memberQuery, "members");
+        
+        if (memberRows && memberRows.length > 1) {
+          const members = memberRows.slice(1).map(row => row[0] as string);
+          if (members.length > 0 && members[0]) {
+            results.push(`      Members with access: ${members.length}`);
+            for (const member of members) {
+              results.push(`        ${member}`);
+            }
+          } else {
+            results.push(`      No members with access found`);
+          }
+        } else {
+          results.push(`      No members with access found`);
+        }
+        
+        // Get entities in this group - using correct table name with namespace
+        const entityQuery = `SELECT "entityId" FROM "dfprograms_1__EntityAccessGrou" WHERE "groupId"='${groupId}'`;
         const entityRows = await queryIndexer(entityQuery, "entities");
         
-        if (entityRows && entityRows.length > 0) {
-          const entities = entityRows.map(row => row[0] as string);
+        if (entityRows && entityRows.length > 1) { // Skip header row
+          const entities = entityRows.slice(1).map(row => row[0] as string); // Skip first row (headers)
           
           for (const entityId of entities) {
             try {
               const coords = decodeBlockCoordinates(entityId as Hex32);
-              results.push(`      Entity: ${entityId} at (${coords[0]}, ${coords[1]}, ${coords[2]})`);
+              
+              // Check if this entity has energy
+              const energyQuery = `SELECT "energy" FROM "Energy" WHERE "entityId"='${entityId}'`;
+              const energyRows = await queryIndexer(energyQuery, "energy");
+              
+              let energyStatus = "❓ Unknown";
+              if (energyRows && energyRows.length > 1) {
+                const energy = Number(energyRows[1][0]); // Skip header, get first data row
+                energyStatus = energy > 0 ? `⚡ ${energy} energy` : "💀 No energy";
+              }
+              
+              results.push(`      Entity: ${entityId} at (${coords[0]}, ${coords[1]}, ${coords[2]}) - ${energyStatus}`);
             } catch (e) {
               results.push(`      Entity: ${entityId} (coordinate decode failed)`);
             }
@@ -165,12 +193,12 @@ export async function showOwnershipInfo(EOAaddress?: string): Promise<void> {
     : (sessionClient.account as any)?.address || sessionClient.account;
 
   window.dispatchEvent(new CustomEvent<string>("worker-log", {
-    detail: `🔍 Ownership Info:`,
+    detail: `🔍 Forcefield Ownership Info: <a href="https://explorer.mud.dev/redstone/worlds/0x253eb85B3C953bFE3827CC14a151262482E7189C/interact?expanded=dfprograms_1%2C0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379#0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379-0x8ff8e1a737b51f40f0ae94887be459cc8f46449901826a6fe0516fe6bd14fead" target="_blank" rel="noopener noreferrer" style="text-decoration: underline; font-weight: bold; font-style: italic;"><b><i><u>Update Here</u></i></b></a>`,
   }));
   
   // Check session address
   window.dispatchEvent(new CustomEvent<string>("worker-log", {
-    detail: `Session Address: ${sessionAddress}`,
+    detail: `Session Address: ${sessionAddress} (${encodePlayerEntityId(sessionAddress)})`,
   }));
   
   const sessionResults = await checkOwnership(sessionAddress);

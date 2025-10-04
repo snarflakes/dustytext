@@ -53,14 +53,30 @@ export class DoneCommand implements CommandHandler {
       console.debug("[done] water fallback not available:", e);
     }
 
-    const actions: string[] = [...byAction.keys()].sort(
-      (a, b) =>
-        (ACTION_ORDER.indexOf(a) === -1 ? 999 : ACTION_ORDER.indexOf(a)) -
-        (ACTION_ORDER.indexOf(b) === -1 ? 999 : ACTION_ORDER.indexOf(b))
-    );
+    // Handle chunk commitments for mine operations before processing
+    if (byAction.has("mine")) {
+      const { MineCommand } = await import("./mine");
+      const mineBlocks = byAction.get("mine")!;
+      const coords = mineBlocks.map(block => ({ x: block.x, y: block.y, z: block.z }));
+      
+      try {
+        await MineCommand.handleChunkCommitments(context, coords);
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `✅ Chunk commitments handled for ${coords.length} mining locations`
+        }));
+      } catch (error) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `❌ Chunk commitment failed: ${error}`
+        }));
+        return;
+      }
+    }
 
-    for (const action of actions) {
-      const items = byAction.get(action)!; // exists by construction
+    for (const action of ACTION_ORDER) {
+      const items = byAction.get(action);
+      if (!items || items.length === 0) {
+        continue; // Skip actions with no queued items
+      }
       window.dispatchEvent(new CustomEvent("worker-log", {
         detail: `▶️ ${action}: ${items.length} block(s)...`
       }));
@@ -102,3 +118,4 @@ export class DoneCommand implements CommandHandler {
     clearSelection(); // release owner & unpause
   }
 }
+

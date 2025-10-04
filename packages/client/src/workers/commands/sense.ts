@@ -1,7 +1,6 @@
 // sense.ts (typed)
 import { CommandHandler, CommandContext } from "./types";
 import { createCoordLinkHTML } from "../../utils/tileLinksHtml";
-import { toHex } from "viem";
 
 /* ---------------------- Env / constants ---------------------- */
 const INDEXER_URL   = "https://indexer.mud.redstonechain.com/q";
@@ -44,15 +43,15 @@ export type ForceFieldInfo = {
   extraDrainRate: bigint | null;
   forceFieldCreatedAt: bigint | null;
   machineCreatedAt: bigint | null;
+  owner?: string | null;
   reason?: string;
 };
 
 /* ---------------------- EntityId / encoding ---------------------- */
-const BYTES_32_BITS    = 256n;
-const ENTITY_TYPE_BITS = 8n;
-const ENTITY_ID_BITS   = BYTES_32_BITS - ENTITY_TYPE_BITS; // 248
-const VEC3_BITS        = 96n;
-
+const BYTES_32_BITS = 256n;
+const TYPE_BITS     = 8n;
+const ID_BITS       = BYTES_32_BITS - TYPE_BITS; // 248
+const VEC3_BITS     = 96n;
 const ENTITY_TYPE_FRAGMENT = 0x02; // confirmed by your sample
 
 let FRAGMENT_SHIFT: number | null = null; // auto-discovered: 16/32/64
@@ -63,23 +62,23 @@ function toU32(n: number): bigint {
   return BigInt.asUintN(32, BigInt(n));
 }
 function packVec3([x, y, z]: Vec3): bigint {
-  const X = toU32(x), Y = toU32(y), Z = toU32(z);
-  return (X << 64n) | (Y << 32n) | Z;
+  return (toU32(x) << 64n) | (toU32(y) << 32n) | toU32(z);
 }
-function encode(entityType: number, data: bigint): Hex32 {
-  return toHex((BigInt(entityType) << ENTITY_ID_BITS) | data, { size: 32 }) as Hex32;
+function encode(type: number, data: bigint): Hex32 {
+  const v   = (BigInt(type) << ID_BITS) | data;
+  const hex = v.toString(16).padStart(64, "0");
+  return (`0x${hex}`) as Hex32;
 }
-function encodeCoord(entityType: number, coord: Vec3): Hex32 {
-  const packed = packVec3(coord);
-  return encode(entityType, packed << (ENTITY_ID_BITS - VEC3_BITS));
+function encodeCoord(type: number, coord: Vec3): Hex32 {
+  return encode(type, packVec3(coord) << (ID_BITS - VEC3_BITS));
 }
 function encodeFragment(frag: Vec3): Hex32 {
   return encodeCoord(ENTITY_TYPE_FRAGMENT, frag);
 }
 function decodePosition(entityId: Hex32): Vec3 {
   const value = BigInt(entityId);
-  const data = value & ((1n << ENTITY_ID_BITS) - 1n);
-  const packedCoord = data >> (ENTITY_ID_BITS - VEC3_BITS);
+  const data = value & ((1n << ID_BITS) - 1n);
+  const packedCoord = data >> (ID_BITS - VEC3_BITS);
   
   const z = Number(BigInt.asIntN(32, packedCoord & 0xFFFFFFFFn));
   const y = Number(BigInt.asIntN(32, (packedCoord >> 32n) & 0xFFFFFFFFn));
@@ -255,6 +254,7 @@ export async function senseActiveForceFieldAt(pos: Vec3): Promise<{
   extraDrainRate?: number | string | null;
   forceFieldCreatedAt?: number | string | null;
   machineCreatedAt?: number | string | null;
+  owner?: string | null;
   reason?: string;
 }> {
   const frag = await readFragmentForceFieldByPos(pos);
@@ -277,7 +277,9 @@ export async function senseActiveForceFieldAt(pos: Vec3): Promise<{
   
   const machineCreatedAt = await readMachineCreatedAt(forceField);
   const machineEnergy = await readMachineEnergy(forceField);
-  console.log(`[sense] Machine createdAt: ${machineCreatedAt}, Fragment forceFieldCreatedAt: ${forceFieldCreatedAt}, Energy: ${machineEnergy}`);
+  const owner = await getForceFieldOwner(forceField);
+  
+  console.log(`[sense] Machine createdAt: ${machineCreatedAt}, Fragment forceFieldCreatedAt: ${forceFieldCreatedAt}, Energy: ${machineEnergy}, Owner: ${owner}`);
   
   // Check if the machine exists and timestamps match
   const machineExists = machineCreatedAt != null;
@@ -305,6 +307,7 @@ export async function senseActiveForceFieldAt(pos: Vec3): Promise<{
     extraDrainRate,
     forceFieldCreatedAt,
     machineCreatedAt,
+    owner,
     reason,
   };
 }
@@ -332,11 +335,12 @@ export async function getForceFieldInfo(pos: Vec3): Promise<ForceFieldInfo> {
 
   const info: ForceFieldInfo = {
     active: r.active,
-    fragmentId: r.fragmentId, // Use the actual found fragmentId, not calculated
+    fragmentId: r.fragmentId,
     forceField: r.forceField,
     extraDrainRate: asBigInt(r.extraDrainRate ?? null),
     forceFieldCreatedAt: asBigInt(r.forceFieldCreatedAt ?? null),
     machineCreatedAt: asBigInt(r.machineCreatedAt ?? null),
+    owner: r.owner,
     reason: r.reason,
   };
 
@@ -370,9 +374,10 @@ export class SenseCommand implements CommandHandler {
         const result = await getForceFieldInfo([x, y, z]);
         const where = createCoordLinkHTML(x, y, z, 4);
         const drain = result.extraDrainRate && result.extraDrainRate > 0n ? ` (drain +${result.extraDrainRate})` : "";
+        const ownerInfo = result.owner ? `\nOwner: ${result.owner}` : "\nOwner: Unowned or custom owner contract";
         const msg = result.active
-          ? `🛡️ Forcefield ACTIVE at ${where}${drain}\nfragment=${result.fragmentId}\nforceField=${result.forceField}`
-          : `🧭 No active forcefield at ${where}${drain}\n${result.reason ?? ""}`;
+          ? `🛡️ Forcefield ACTIVE at ${where}${drain}${ownerInfo}\nfragment=${result.fragmentId}\nforceField=${result.forceField}`
+          : `🧭 No active forcefield at ${where}${drain}${ownerInfo}\n${result.reason ?? ""}`;
         window.dispatchEvent(new CustomEvent<string>("worker-log", { detail: msg }));
         return;
       }
@@ -382,9 +387,10 @@ export class SenseCommand implements CommandHandler {
       const result = await getForceFieldInfo([pos.x, pos.y, pos.z]);
       const where = createCoordLinkHTML(pos.x, pos.y, pos.z, 4);
       const drain = result.extraDrainRate && result.extraDrainRate > 0n ? ` (drain +${result.extraDrainRate})` : "";
+      const ownerInfo = result.owner ? `\nOwner: ${result.owner}` : "\nOwner: Unowned or custom owner contract";
       const msg = result.active
-        ? `🛡️ Forcefield ACTIVE ${where}${drain}\nfragment=${result.fragmentId}\nforceField=${result.forceField}`
-        : `🧭 No active forcefield detected ${where}${drain}\n${result.reason ?? ""}`;
+        ? `🛡️ Forcefield ACTIVE ${where}${drain}${ownerInfo}\nfragment=${result.fragmentId}\nforceField=${result.forceField}`
+        : `🧭 No active forcefield detected ${where}${drain}${ownerInfo}\n${result.reason ?? ""}`;
       window.dispatchEvent(new CustomEvent<string>("worker-log", { detail: msg }));
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -405,3 +411,69 @@ export class SenseCommand implements CommandHandler {
 //   }
 //   return null;
 // }
+
+async function getForceFieldOwner(entityId: Hex32): Promise<string | null> {
+  try {
+    console.log(`[sense] Getting owner for entity: ${entityId}`);
+    
+    // Try to get access group for the force field entity ID directly
+    const groupQuery = `SELECT "groupId" FROM "EntityAccessGrou" WHERE "entityId"='${entityId}'`;
+    const groupRes = await fetch(INDEXER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ address: WORLD_ADDRESS, query: groupQuery }]),
+    });
+    
+    if (!groupRes.ok) {
+      console.log(`[sense] No access group found for force field (this is normal for unowned force fields)`);
+      return null;
+    }
+    
+    const groupJson = await groupRes.json();
+    const groupRows = groupJson?.result?.[0];
+    if (!Array.isArray(groupRows) || groupRows.length < 2) {
+      console.log(`[sense] No group data found`);
+      return null;
+    }
+    
+    const [, ...groupValues] = groupRows;
+    const groupId = groupValues[0] as string;
+    
+    if (!groupId) {
+      console.log(`[sense] Empty group ID`);
+      return null;
+    }
+    
+    console.log(`[sense] Found access group: ${groupId}`);
+    
+    // Get the owner of this access group
+    const ownerQuery = `SELECT "owner" FROM "AccessGroupOwner" WHERE "groupId"='${groupId}'`;
+    const ownerRes = await fetch(INDEXER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ address: WORLD_ADDRESS, query: ownerQuery }]),
+    });
+    
+    if (!ownerRes.ok) {
+      console.log(`[sense] Owner query failed: ${ownerRes.status}`);
+      return null;
+    }
+    
+    const ownerJson = await ownerRes.json();
+    const ownerRows = ownerJson?.result?.[0];
+    if (!Array.isArray(ownerRows) || ownerRows.length < 2) {
+      console.log(`[sense] No owner data found`);
+      return null;
+    }
+    
+    const [, ...ownerValues] = ownerRows;
+    const owner = ownerValues[0] as string;
+    
+    console.log(`[sense] Found owner: ${owner}`);
+    return owner || null;
+    
+  } catch (error) {
+    console.error(`[sense] Error getting force field owner:`, error);
+    return null;
+  }
+}

@@ -161,9 +161,15 @@ export class BuildCommand implements CommandHandler {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ You ran out of items to build with. Check your inventory and equip more seeds/blocks."
         }));
-      } else if (errorMessage.includes("Can only build on air or water")) {
+      } else if (errorMessage.includes("Can only build on air or water") ||
+                 errorMessage.includes("43616e206f6e6c79206275696c64206f6e20616972206f72207761746572")) {
         window.dispatchEvent(new CustomEvent("worker-log", {
-          detail: "❌ This spot isn’t air/water. For seeds, target the air block above farmland (click farmland; we auto-place at +1)."
+          detail: "❌ This spot isn't air/water. For seeds, target the air block above farmland (click farmland; we auto-place at +1)."
+        }));
+      } else if (errorMessage.includes("UserOperationExecutionError") && 
+                 errorMessage.includes("43616e206f6e6c79206275696c64206f6e20616972206f722077617465720000")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ Cannot build on switchgrass or other vegetation. You need to target air blocks or water. Try clearing the area first or building elsewhere."
         }));
       } else if (errorMessage.includes("Cannot build where there are dropped objects")) {
         window.dispatchEvent(new CustomEvent("worker-log", {
@@ -177,6 +183,16 @@ export class BuildCommand implements CommandHandler {
                  errorMessage.includes("43616e6e6f7420706c616e74206f6e207468697320626c6f636b")) {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ Cannot plant seeds on this block type. Seeds need to be planted on farmland ('till'ed dirt) that has been watered by a water bucket."
+        }));
+      } else if (errorMessage.includes("Cannot build on a movable entity") ||
+                 errorMessage.includes("43616e6e6f74206275696c64206f6e2061206d6f7661626c6520656e74697479")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ Cannot build on a movable entity. Try targeting a different location away from players/mobs."
+        }));
+      } else if (errorMessage.includes("Blueprint not set for coord") ||
+                 errorMessage.includes("426c75657072696e74206e6f742073657420666f7220636f6f72640000000000")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ No blueprint set for this location. The forcefield owner needs to create a build plan here first before blocks can be placed."
         }));
       } else {
         window.dispatchEvent(new CustomEvent("worker-log", {

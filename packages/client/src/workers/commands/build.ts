@@ -161,9 +161,15 @@ export class BuildCommand implements CommandHandler {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ You ran out of items to build with. Check your inventory and equip more seeds/blocks."
         }));
-      } else if (errorMessage.includes("Can only build on air or water")) {
+      } else if (errorMessage.includes("Can only build on air or water") ||
+                 errorMessage.includes("43616e206f6e6c79206275696c64206f6e20616972206f72207761746572")) {
         window.dispatchEvent(new CustomEvent("worker-log", {
-          detail: "❌ This spot isn’t air/water. For seeds, target the air block above farmland (click farmland; we auto-place at +1)."
+          detail: "❌ This spot isn't air/water. For seeds, target the air block above farmland (click farmland; we auto-place at +1)."
+        }));
+      } else if (errorMessage.includes("UserOperationExecutionError") && 
+                 errorMessage.includes("43616e206f6e6c79206275696c64206f6e20616972206f722077617465720000")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ Cannot build on switchgrass or other vegetation. You need to target air blocks or water. Try clearing the area first or building elsewhere."
         }));
       } else if (errorMessage.includes("Cannot build where there are dropped objects")) {
         window.dispatchEvent(new CustomEvent("worker-log", {

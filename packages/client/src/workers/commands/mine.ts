@@ -208,8 +208,7 @@ export class MineCommand implements CommandHandler {
     
     // Wait for indexer to be up-to-date before starting
     await new Promise(resolve => setTimeout(resolve, 2500));
-    
-    // --- Check and handle chunk commitments ONCE before mining attempts ---
+
     const entityId = encodePlayerEntityId(context.address);
     let mineX: number, mineY: number, mineZ: number;
 
@@ -253,66 +252,27 @@ export class MineCommand implements CommandHandler {
       mineZ = z;
     }
 
-    // Check and handle chunk commitments before mining
-    const chunksToCheck = new Set<string>();
-    const coordsToMine = [{ x: mineX, y: mineY, z: mineZ }];
-    
-    for (const coord of coordsToMine) {
-      const chunk = coordToChunkCoord(coord.x, coord.y, coord.z);
-      chunksToCheck.add(`${chunk.cx},${chunk.cy},${chunk.cz}`);
-    }
+    // Only handle chunk commitments for direct mine commands (not when called from done)
+    // If coords are provided (JSON), it means this is being called from done command
+    // which already handled chunk commitments globally
+    if (!coords) {
+      // This is a direct mine command, handle chunk commitments
+      const coordsToMine = [{ x: mineX, y: mineY, z: mineZ }];
 
-    for (const chunkKey of chunksToCheck) {
-      const [cx, cy, cz] = chunkKey.split(',').map(Number);
-
-      // Check ChunkCommitment table using individual x, y, z columns
-      const chunkQuery = `SELECT "x", "y", "z", "blockNumber" FROM "ChunkCommitment" WHERE "x" = ${cx} AND "y" = ${cy} AND "z" = ${cz}`;
-      const chunkRes = await fetch(INDEXER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ address: WORLD_ADDRESS, query: chunkQuery }]),
-      });
-
-      if (!chunkRes.ok) {
-        console.error(`Failed to query chunk (${cx},${cy},${cz}): ${chunkRes.status}`);
-        continue;
-      }
-
-      const chunkJson = await chunkRes.json();
-      const chunkRows = chunkJson?.result?.[0];
-
-      if (Array.isArray(chunkRows) && chunkRows.length >= 2) {
-        const [cols, vals] = chunkRows;
-        const commitment = Object.fromEntries(cols.map((k: unknown, i: number) => [String(k), vals[i]]));
-        const blockNumber = Number(commitment.blockNumber || 0);
-        console.log(`Chunk (${cx},${cy},${cz}) found with blockNumber: ${blockNumber}`);
-
-        // Since we found a commitment record, assume the chunk is ready for mining
-        // The actual timing logic will be handled during mining attempts
-        console.log(`Chunk (${cx},${cy},${cz}) commitment found, ready for mining`);
-        continue;
-      } else {
-        // No existing commitment, need to init
-        console.log(`No commitment found for chunk (${cx},${cy},${cz}), initializing...`);
-        try {
-          await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
-
-          const committedRound = await getCurrentRound();
-          await waitForRoundAvailable(committedRound);
-          await fulfillChunkCommit(context.sessionClient, WORLD_ADDRESS, cx, cy, cz, committedRound);
-          console.log(`Chunk (${cx},${cy},${cz}) initialized and fulfilled`);
-        } catch (error) {
-          const errorMessage = String(error);
-          if (errorMessage.includes('Not yet fulfillable') ||
-              errorMessage.includes('4e6f74207965742066756c66696c6c61626c6500000000000000000000000000')) {
-            console.warn(`Chunk (${cx},${cy},${cz}) not yet fulfillable, will retry during mining`);
-            // Continue with mining, let the mining retry logic handle it
-          } else {
-            throw error;
-          }
-        }
+      try {
+        await MineCommand.handleChunkCommitments(context, coordsToMine);
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `✅ Chunk commitments handled for mining location`
+        }));
+      } catch (error) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `❌ Chunk commitment failed: ${error}`
+        }));
+        return;
       }
     }
+
+
 
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       try {
@@ -487,12 +447,18 @@ export class MineCommand implements CommandHandler {
               
             } catch (reinitError) {
               const reinitMsg = String(reinitError);
-              if (!reinitMsg.includes('Existing chunk commitment')) {
+              if (reinitMsg.includes('Existing chunk commitment') ||
+                  reinitMsg.includes('4578697374696e67206368756e6b20636f6d6d69746d656e74')) {
+                // There's an existing commitment, but it's expired. We need to wait for it to be clearable.
+                // Chunk commitments can be reset after 10 minutes (600 seconds)
+                window.dispatchEvent(new CustomEvent("worker-log", {
+                  detail: `⏳ Chunk commitment exists, waiting before retry...`
+                }));
+                await new Promise(resolve => setTimeout(resolve, 10000)); // Wait longer
+                continue;
+              } else {
                 throw reinitError;
               }
-              // If "existing commitment", the old one might still be valid, just retry
-              await new Promise(resolve => setTimeout(resolve, 5000));
-              continue;
             }
           } else {
             window.dispatchEvent(new CustomEvent("worker-log", { 

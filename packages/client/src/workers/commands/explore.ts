@@ -100,7 +100,7 @@ function createClickableBlock(block: SelectableBlock): string {
   const blockId = `block-${block.x}-${block.y}-${block.z}`;
   const isAir = block.name.toLowerCase() === "air";
   const isGrownWheat = block.name.includes("WheatSeed(G)");
-  const isPassableVegetation = ["switchgrass", "fescue", "vines", "hempbush", "cottonbush"].some(plant => 
+  const isPassableVegetation = ["switchgrass", "fescue", "vines", "hempbush", "cottonbush", "bamboobush", "flower"].some(plant => 
     block.name.toLowerCase().includes(plant.toLowerCase())
   );
 

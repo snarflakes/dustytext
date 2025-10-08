@@ -417,7 +417,7 @@ async function getForceFieldOwner(entityId: Hex32): Promise<string | null> {
     console.log(`[sense] Getting owner for entity: ${entityId}`);
     
     // Try to get access group for the force field entity ID directly
-    const groupQuery = `SELECT "groupId" FROM "EntityAccessGrou" WHERE "entityId"='${entityId}'`;
+    const groupQuery = `SELECT "groupId" FROM "dfprograms_1__EntityAccessGrou" WHERE "entityId"='${entityId}'`;
     const groupRes = await fetch(INDEXER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -447,7 +447,7 @@ async function getForceFieldOwner(entityId: Hex32): Promise<string | null> {
     console.log(`[sense] Found access group: ${groupId}`);
     
     // Get the owner of this access group
-    const ownerQuery = `SELECT "owner" FROM "AccessGroupOwner" WHERE "groupId"='${groupId}'`;
+    const ownerQuery = `SELECT "owner" FROM "dfprograms_1__AccessGroupOwner" WHERE "groupId"='${groupId}'`;
     const ownerRes = await fetch(INDEXER_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

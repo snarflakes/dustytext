@@ -242,19 +242,33 @@ export class ClaimFieldCommand implements CommandHandler {
           const machine = encodeBlock(blockBeneath);
           
           // Check if this block has an access group (is a machine)
-          const entityQuery = `SELECT "groupId" FROM "EntityAccessGrou" WHERE "entityId"='${machine}'`;
+          const entityQuery = `SELECT "groupId" FROM "dfprograms_1__EntityAccessGrou" WHERE "entityId"='${machine}'`;
+
+          console.log(`[claimfield-check] Querying for machine access group: ${entityQuery}`);
+
           const entityRes = await fetch(INDEXER_URL, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify([{ address: WORLD_ADDRESS, query: entityQuery }]),
           });
-          
-          const entityJson = await entityRes.json();
-          const entityRows = entityJson?.result?.[0];
-          
-          if (!Array.isArray(entityRows) || entityRows.length < 2) {
+
+          let hasAccessGroup = false;
+          console.log(`[claimfield-check] HTTP response status: ${entityRes.status}`);
+
+          if (entityRes.ok) {
+            const entityJson = await entityRes.json();
+            console.log(`[claimfield-check] Response JSON:`, entityJson);
+            const entityRows = entityJson?.result?.[0];
+            hasAccessGroup = Array.isArray(entityRows) && entityRows.length >= 2;
+            console.log(`[claimfield-check] Has access group: ${hasAccessGroup}`);
+          } else {
+            const errorText = await entityRes.text();
+            console.log(`[claimfield-check] HTTP error: ${entityRes.status} - ${errorText}`);
+          }
+
+          if (!hasAccessGroup) {
             window.dispatchEvent(new CustomEvent<string>("worker-log", {
-              detail: `❌ Your session address doesn't don't own a forcefield, you aren't standing in a forcefield, and you are not standing on a machine block. No changes made.`,
+              detail: `❌ Your session address doesn't own a forcefield, you aren't standing in a forcefield, and you are not standing on a machine block. No changes made.`,
             }));
             return;
           }
@@ -283,10 +297,20 @@ export class ClaimFieldCommand implements CommandHandler {
 
       let ff: ForceFieldInfo;
       if (targetPos) {
+        console.log(`[claimfield] Getting force field info for coordinates: ${targetPos}`);
         ff = await getForceFieldInfo(targetPos);
       } else {
+        console.log(`[claimfield] Getting force field info for player: ${context.address}`);
         ff = await getForceFieldInfoForPlayer(context.address);
       }
+
+      console.log(`[claimfield] Force field info:`, {
+        active: ff.active,
+        forceField: ff.forceField,
+        fragmentId: ff.fragmentId,
+        owner: ff.owner,
+        reason: ff.reason
+      });
 
       let machine: `0x${string}`;
       let coordsForLog: Vec3 | null = null;
@@ -294,42 +318,93 @@ export class ClaimFieldCommand implements CommandHandler {
       if (ff.forceField !== ZERO_ENTITY_ID) {
         // Use the existing machine entity
         machine = ff.forceField;
+        console.log(`[claimfield] Using existing force field entity: ${machine}`);
       } else {
         // No force field detected yet — fall back to block beneath the player
         const pos = await fetchPlayerBlock(context.address);
         if (!pos) throw new Error("No position found — try 'spawn' first.");
         coordsForLog = [pos[0], pos[1] - 1, pos[2]];
         machine = encodeBlock(coordsForLog);
+        console.log(`[claimfield] Using encoded block entity: ${machine} at (${coordsForLog[0]}, ${coordsForLog[1]}, ${coordsForLog[2]})`);
       }
 
       // Get the session address that's actually making transactions
-      const sessionAddress = typeof context.sessionClient.account === 'string' 
-        ? context.sessionClient.account 
+      const sessionAddress = typeof context.sessionClient.account === 'string'
+        ? context.sessionClient.account
         : context.sessionClient.account.address;
+
+      // DefaultProgramSy system ID in dfprograms_1 namespace
+      const DEFAULT_PROGRAM_SYSTEM_ID = "0x737964666070726f6772616d73000000044656661756c7450726f6772616d5379" as const;
       
-      // First, get the groupId for this machine entity
-      const entityQuery = `SELECT "groupId" FROM "EntityAccessGrou" WHERE "entityId"='${machine}'`;
+      // First, try to get the groupId for this machine entity
+      const entityQuery = `SELECT "groupId" FROM "dfprograms_1__EntityAccessGrou" WHERE "entityId"='${machine}'`;
+
+      console.log(`[claimfield] Querying for access group: ${entityQuery}`);
+
       const entityRes = await fetch(INDEXER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify([{ address: WORLD_ADDRESS, query: entityQuery }]),
       });
-      
-      if (!entityRes.ok) {
-        throw new Error("Failed to query entity access group");
-      }
-      
-      const entityJson = await entityRes.json();
-      const entityRows = entityJson?.result?.[0];
-      if (!Array.isArray(entityRows) || entityRows.length < 2) {
-        throw new Error("No access group found for this entity");
-      }
-      
-      const [, ...entityValues] = entityRows;
-      const groupId = entityValues[0] as string;
 
-      // DefaultProgramSy system ID in dfprograms_1 namespace
-      const DEFAULT_PROGRAM_SYSTEM_ID = "0x737964666070726f6772616d73000000044656661756c7450726f6772616d5379" as const;
+      let groupId: string | null = null;
+
+      console.log(`[claimfield] HTTP response status: ${entityRes.status}`);
+
+      if (entityRes.ok) {
+        const entityJson = await entityRes.json();
+        console.log(`[claimfield] Response JSON:`, entityJson);
+        const entityRows = entityJson?.result?.[0];
+        if (Array.isArray(entityRows) && entityRows.length >= 2) {
+          const [, ...entityValues] = entityRows;
+          groupId = entityValues[0] as string;
+          console.log(`[claimfield] Found groupId: ${groupId}`);
+        } else {
+          console.log(`[claimfield] No group data found in response`);
+        }
+      } else {
+        const errorText = await entityRes.text();
+        console.log(`[claimfield] HTTP error: ${entityRes.status} - ${errorText}`);
+      }
+
+      if (!groupId) {
+        // This force field doesn't have an access group yet (unowned)
+        // Generate a new group ID based on the machine entity ID
+        groupId = machine; // Use the machine entity ID as the group ID
+
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `🔍 Force field is unowned. Creating new access group: ${groupId}`,
+        }));
+      } else {
+        console.log(`[claimfield] Found existing group: ${groupId}`);
+
+        // Check if the session address is already a member of this group
+        const sessionBytes32 = encodePlayerEntityId(sessionAddress);
+        const memberQuery = `SELECT "hasAccess" FROM "dfprograms_1__AccessGroupMembe" WHERE "groupId"='${groupId}' AND "member"='${sessionBytes32}'`;
+
+        console.log(`[claimfield] Checking if session address is already a member: ${memberQuery}`);
+
+        const memberRes = await fetch(INDEXER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([{ address: WORLD_ADDRESS, query: memberQuery }]),
+        });
+
+        if (memberRes.ok) {
+          const memberJson = await memberRes.json();
+          const memberRows = memberJson?.result?.[0];
+          if (Array.isArray(memberRows) && memberRows.length >= 2) {
+            const hasAccess = memberRows[1][0]; // Get the hasAccess value
+            console.log(`[claimfield] Session address already has access: ${hasAccess}`);
+
+            if (hasAccess) {
+              window.dispatchEvent(new CustomEvent<string>("worker-log", {
+                detail: `✅ You already have access to this force field (group ${groupId}). Adding EOA address as additional member...`,
+              }));
+            }
+          }
+        }
+      }
 
       // Step 1: Add session address as member
       const setMembershipCallData = encodeFunctionData({

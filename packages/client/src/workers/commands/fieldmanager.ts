@@ -334,6 +334,9 @@ export class ClaimFieldCommand implements CommandHandler {
         ? context.sessionClient.account
         : context.sessionClient.account.address;
 
+      // Get the EOA address
+      const eoaAddress = (context.sessionClient as any).userAddress || context.address;
+
       // DefaultProgramSy system ID in dfprograms_1 namespace
       const DEFAULT_PROGRAM_SYSTEM_ID = resourceToHex({
         type: "system",
@@ -433,7 +436,12 @@ export class ClaimFieldCommand implements CommandHandler {
         }
 
         // Check if EOA address is already a member
-        const eoaBytes32 = encodePlayerEntityId(context.address);
+        console.log(`[claimfield] context.address: ${context.address}`);
+        console.log(`[claimfield] sessionAddress: ${sessionAddress}`);
+        console.log(`[claimfield] eoaAddress: ${eoaAddress}`);
+        const eoaBytes32 = encodePlayerEntityId(eoaAddress);
+        console.log(`[claimfield] eoaBytes32: ${eoaBytes32}`);
+        console.log(`[claimfield] sessionBytes32: ${sessionBytes32}`);
         const eoaMemberQuery = `SELECT "hasAccess" FROM "dfprograms_1__AccessGroupMembe" WHERE "groupId"='${groupId}' AND "member"='${eoaBytes32}'`;
 
         console.log(`[claimfield] Checking if EOA address is already a member: ${eoaMemberQuery}`);
@@ -518,7 +526,7 @@ export class ClaimFieldCommand implements CommandHandler {
           stateMutability: "nonpayable"
         }],
         functionName: "setMembership",
-        args: [callerBytes32, BigInt(groupIdNumeric), context.address as `0x${string}`, true],
+        args: [callerBytes32, BigInt(groupIdNumeric), eoaAddress as `0x${string}`, true],
       });
 
       const dataEOA = encodeFunctionData({

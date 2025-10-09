@@ -406,6 +406,10 @@ export class ClaimFieldCommand implements CommandHandler {
         }
       }
 
+      // Convert numeric group ID to bytes32 format
+      const groupIdBytes32 = `0x${Number(groupId).toString(16).padStart(64, '0')}` as `0x${string}`;
+      console.log(`[claimfield] Converting groupId ${groupId} to bytes32: ${groupIdBytes32}`);
+
       // Step 1: Add session address as member
       const setMembershipCallData = encodeFunctionData({
         abi: [{
@@ -420,7 +424,7 @@ export class ClaimFieldCommand implements CommandHandler {
           stateMutability: "nonpayable"
         }],
         functionName: "setMembership",
-        args: [groupId as `0x${string}`, sessionAddress, true],
+        args: [groupIdBytes32, sessionAddress, true],
       });
 
       const dataSession = encodeFunctionData({
@@ -449,7 +453,7 @@ export class ClaimFieldCommand implements CommandHandler {
           stateMutability: "nonpayable"
         }],
         functionName: "setMembership",
-        args: [groupId as `0x${string}`, context.address as `0x${string}`, true],
+        args: [groupIdBytes32, context.address as `0x${string}`, true],
       });
 
       const dataEOA = encodeFunctionData({

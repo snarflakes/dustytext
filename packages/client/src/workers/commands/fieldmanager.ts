@@ -3,6 +3,7 @@ import { CommandHandler, CommandContext } from "./types";
 import { getForceFieldInfoForPlayer, getForceFieldInfo, ForceFieldInfo } from "./sense";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 import { queryIndexer } from "./queryIndexer";
+import { resourceToHex } from "@latticexyz/common";
 
 /* ---------------------- World / Indexer ---------------------- */
 const WORLD_ADDRESS  = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
@@ -334,7 +335,13 @@ export class ClaimFieldCommand implements CommandHandler {
         : context.sessionClient.account.address;
 
       // DefaultProgramSy system ID in dfprograms_1 namespace
-      const DEFAULT_PROGRAM_SYSTEM_ID = "0x737964666070726f6772616d73000000044656661756c7450726f6772616d5379" as const;
+      const DEFAULT_PROGRAM_SYSTEM_ID = resourceToHex({
+        type: "system",
+        namespace: "dfprograms_1",
+        name: "DefaultProgramSy",
+      }) as `0x${string}`;
+
+      console.log(`[claimfield] Generated system ID: ${DEFAULT_PROGRAM_SYSTEM_ID} (length: ${DEFAULT_PROGRAM_SYSTEM_ID.length})`);
       
       // First, try to get the groupId for this machine entity
       const entityQuery = `SELECT "groupId" FROM "dfprograms_1__EntityAccessGrou" WHERE "entityId"='${machine}'`;

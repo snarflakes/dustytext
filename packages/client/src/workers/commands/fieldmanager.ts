@@ -385,6 +385,26 @@ export class ClaimFieldCommand implements CommandHandler {
       } else {
         console.log(`[claimfield] Found existing group: ${groupId}`);
 
+        // Check who the actual owner of this group is
+        const ownerQuery = `SELECT "owner" FROM "dfprograms_1__AccessGroupOwner" WHERE "groupId"='${groupId}'`;
+        console.log(`[claimfield] Checking group owner: ${ownerQuery}`);
+
+        const ownerRes = await fetch(INDEXER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([{ address: WORLD_ADDRESS, query: ownerQuery }]),
+        });
+
+        let actualOwner: string | null = null;
+        if (ownerRes.ok) {
+          const ownerJson = await ownerRes.json();
+          const ownerRows = ownerJson?.result?.[0];
+          if (Array.isArray(ownerRows) && ownerRows.length >= 2) {
+            actualOwner = ownerRows[1][0] as string;
+            console.log(`[claimfield] Actual group owner: ${actualOwner}`);
+          }
+        }
+
         // Check if the session address is already a member of this group
         const sessionBytes32 = encodePlayerEntityId(sessionAddress);
         const memberQuery = `SELECT "hasAccess" FROM "dfprograms_1__AccessGroupMembe" WHERE "groupId"='${groupId}' AND "member"='${sessionBytes32}'`;
@@ -411,27 +431,64 @@ export class ClaimFieldCommand implements CommandHandler {
             }
           }
         }
+
+        // Check if EOA address is already a member
+        const eoaBytes32 = encodePlayerEntityId(context.address);
+        const eoaMemberQuery = `SELECT "hasAccess" FROM "dfprograms_1__AccessGroupMembe" WHERE "groupId"='${groupId}' AND "member"='${eoaBytes32}'`;
+
+        console.log(`[claimfield] Checking if EOA address is already a member: ${eoaMemberQuery}`);
+
+        const eoaMemberRes = await fetch(INDEXER_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([{ address: WORLD_ADDRESS, query: eoaMemberQuery }]),
+        });
+
+        let eoaHasAccess = false;
+        if (eoaMemberRes.ok) {
+          const eoaMemberJson = await eoaMemberRes.json();
+          const eoaMemberRows = eoaMemberJson?.result?.[0];
+          if (Array.isArray(eoaMemberRows) && eoaMemberRows.length >= 2) {
+            eoaHasAccess = eoaMemberRows[1][0]; // Get the hasAccess value
+            console.log(`[claimfield] EOA address already has access: ${eoaHasAccess}`);
+          }
+        }
+
+        // If both addresses already have access, we're done
+        if (eoaHasAccess) {
+          window.dispatchEvent(new CustomEvent<string>("worker-log", {
+            detail: `✅ Both session and EOA addresses already have access to this force field (group ${groupId}). No changes needed.`,
+          }));
+          return;
+        }
+
+        // Check if we have permission to modify this group
+        if (actualOwner !== sessionBytes32 && actualOwner !== eoaBytes32) {
+          throw new Error(`You don't own this access group. Owner: ${actualOwner}, Session: ${sessionBytes32}, EOA: ${eoaBytes32}`);
+        }
       }
 
-      // Convert numeric group ID to bytes32 format
-      const groupIdBytes32 = `0x${Number(groupId).toString(16).padStart(64, '0')}` as `0x${string}`;
-      console.log(`[claimfield] Converting groupId ${groupId} to bytes32: ${groupIdBytes32}`);
+      // Use numeric group ID (not bytes32) and include caller parameter
+      const groupIdNumeric = Number(groupId);
+      const callerBytes32 = encodePlayerEntityId(sessionAddress);
+      console.log(`[claimfield] Using groupId ${groupIdNumeric}, caller: ${callerBytes32}`);
 
-      // Step 1: Add session address as member
+      // Step 1: Add session address as member (using caller, groupId, member, allowed signature)
       const setMembershipCallData = encodeFunctionData({
         abi: [{
           type: "function",
           name: "setMembership",
           inputs: [
-            { name: "groupId", type: "bytes32" },
+            { name: "caller", type: "bytes32" },
+            { name: "groupId", type: "uint256" },
             { name: "member", type: "address" },
-            { name: "isMember", type: "bool" }
+            { name: "allowed", type: "bool" }
           ],
           outputs: [],
           stateMutability: "nonpayable"
         }],
         functionName: "setMembership",
-        args: [groupIdBytes32, sessionAddress, true],
+        args: [callerBytes32, BigInt(groupIdNumeric), sessionAddress, true],
       });
 
       const dataSession = encodeFunctionData({
@@ -446,21 +503,22 @@ export class ClaimFieldCommand implements CommandHandler {
         gas: 300_000n,
       }) as `0x${string}`;
 
-      // Step 2: Add EOA address as member
+      // Step 2: Add EOA address as member (using caller, groupId, member, allowed signature)
       const setMembershipCallDataEOA = encodeFunctionData({
         abi: [{
           type: "function",
           name: "setMembership",
           inputs: [
-            { name: "groupId", type: "bytes32" },
+            { name: "caller", type: "bytes32" },
+            { name: "groupId", type: "uint256" },
             { name: "member", type: "address" },
-            { name: "isMember", type: "bool" }
+            { name: "allowed", type: "bool" }
           ],
           outputs: [],
           stateMutability: "nonpayable"
         }],
         functionName: "setMembership",
-        args: [groupIdBytes32, context.address as `0x${string}`, true],
+        args: [callerBytes32, BigInt(groupIdNumeric), context.address as `0x${string}`, true],
       });
 
       const dataEOA = encodeFunctionData({

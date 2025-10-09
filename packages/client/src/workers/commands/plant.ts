@@ -206,11 +206,12 @@ export class PlantCommand implements CommandHandler {
               "🧺 You’ve run out of seeds. Restock your pouch, equip them, and sow once more.",
           }),
         );
-      } else if (errorMessage.includes("Can only build on air or water")) {
+      } else if (errorMessage.includes("Can only build on air or water") ||
+                 errorMessage.includes("43616e206f6e6c79206275696c64206f6e20616972206f72207761746572")) {
         window.dispatchEvent(
           new CustomEvent("worker-log", {
             detail:
-              "💨 Seeds belong in the air cell above farmland. Click farmland—I'll place the seed one block above it.",
+              "🌱 This spot already has a plant or block. Seeds need empty air above farmland to grow.",
           }),
         );
       } else if (errorMessage.includes("Cannot build where there are dropped objects")) {

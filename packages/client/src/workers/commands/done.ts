@@ -70,6 +70,37 @@ export class DoneCommand implements CommandHandler {
         }));
         return;
       }
+
+      // Check if we can batch mine operations
+      const equippedTool = (globalThis as typeof globalThis & { equippedTool: { slot: number; type: string; name: string } | null }).equippedTool;
+      if (equippedTool && mineBlocks.length > 1) {
+        try {
+          await MineCommand.batchMineWithTool(context, mineBlocks, equippedTool);
+          window.dispatchEvent(new CustomEvent("worker-log", {
+            detail: `✅ Batch mining complete: ${mineBlocks.length} blocks using ${equippedTool.type}`
+          }));
+          // Remove mine from byAction so it doesn't get processed again
+          byAction.delete("mine");
+        } catch (error) {
+          const errorMsg = String(error);
+          
+          // Log the specific batch error reason
+          if (errorMsg.includes('unreachable') || errorMsg.includes('not mineable')) {
+            window.dispatchEvent(new CustomEvent("worker-log", {
+              detail: `⚠️ Some blocks unreachable in batch, mining individually...`
+            }));
+          } else if (errorMsg.includes('gas')) {
+            window.dispatchEvent(new CustomEvent("worker-log", {
+              detail: `⚠️ Batch gas limit exceeded, mining individually...`
+            }));
+          } else {
+            window.dispatchEvent(new CustomEvent("worker-log", {
+              detail: `⚠️ Batch mining failed (${errorMsg.split(':')[1]?.trim() || 'unknown'}), mining individually...`
+            }));
+          }
+          // Fall back to individual mining - don't remove from byAction
+        }
+      }
     }
 
     for (const action of ACTION_ORDER) {
@@ -118,4 +149,6 @@ export class DoneCommand implements CommandHandler {
     clearSelection(); // release owner & unpause
   }
 }
+
+
 

@@ -49,6 +49,35 @@ export class EatCommand implements CommandHandler {
       }));
 
     } catch (error) {
+      const errorMessage = String(error);
+      
+      // Check for "Object is not food" error
+      if (errorMessage.includes('4f626a656374206973206e6f7420666f6f640000000000000000000000000000') ||
+          errorMessage.includes('Object is not food')) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `❌ The equipped ${equippedTool?.type || 'item'} is not edible. Equip food items like bread, apples, or cooked meat to eat.`
+        }));
+        return;
+      }
+      
+      // Check for gas limit error
+      if (errorMessage.includes('0x34a44dbe') || 
+          errorMessage.includes('gas limit too low')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+        }));
+        return;
+      }
+      
+      // Check for energy error (player is dead)
+      if (errorMessage.includes('Entity has no energy') || 
+          errorMessage.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
+        }));
+        return;
+      }
+
       window.dispatchEvent(new CustomEvent("worker-log", {
         detail: `❌ Eat failed: ${error}`
       }));

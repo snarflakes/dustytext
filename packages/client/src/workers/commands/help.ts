@@ -35,7 +35,7 @@ export class HelpCommand implements CommandHandler {
       '       [Sense] check force field status at your location, or at a specific coordinate, sense x y z,',
       '       [ProjectField] create a force field at your location, or at a specific coordinate, projectfield x y z,',
       '       [Detach] remove force field from a machine, or from your location, detach x y z,',
-      '       [Fieldmanager] check force field ownership and manage fields,',
+      '       [ClaimField x y z] expand access to specified force field to EOA account,',
       '  Other World Commands:',
       '       [Sleep] rest in a bed to guard health and energy,',
       '       [Scan] search for nearby players, scan <radius> (default: 10),',
@@ -48,7 +48,7 @@ export class HelpCommand implements CommandHandler {
       
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',
       '  System: help/h, clear, balance/bal, players/who,',
-      '  Debug: debug/d',
+      '  Debug: check forcefield ownership for EOA and session account',
       '  Key Notes: When in explore looking for a space to move, if you see only AIR in a direction, you will take significant damage. Try placing a block first!'
     ];
     

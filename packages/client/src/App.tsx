@@ -402,6 +402,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'claimfield' || command === 'cf' || command.startsWith('claimfield ') || command.startsWith('cf ')) {
       runCommand(command.trim());
+    } else if (command === 'claimmachine' || command === 'cf' || command.startsWith('claimmachine ') || command.startsWith('claimfield ') || command.startsWith('cf ')) {
+      runCommand(command.trim());
     } else if (command === 'sleep') {
       runCommand('sleep');
     } else if (command === 'wakeup' || command.startsWith('wakeup ')) {

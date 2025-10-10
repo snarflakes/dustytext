@@ -1,6 +1,6 @@
 import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
-import { getForceFieldInfoForPlayer, getForceFieldInfo, ForceFieldInfo } from "./sense";
+import { getForceFieldInfoForPlayer } from "./sense";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 import { queryIndexer } from "./queryIndexer";
 import { resourceToHex } from "@latticexyz/common";
@@ -221,7 +221,7 @@ export async function showOwnershipInfo(EOAaddress?: string): Promise<void> {
 }
 
 /* ---------------------- Command ---------------------- */
-export class ClaimFieldCommand implements CommandHandler {
+export class ClaimMachineCommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
     // If no args, check current location first
     if (args.length === 0) {
@@ -245,7 +245,7 @@ export class ClaimFieldCommand implements CommandHandler {
           // Check if this block has an access group (is a machine)
           const entityQuery = `SELECT "groupId" FROM "dfprograms_1__EntityAccessGrou" WHERE "entityId"='${machine}'`;
 
-          console.log(`[claimfield-check] Querying for machine access group: ${entityQuery}`);
+          console.log(`[claimmachine-check] Querying for machine access group: ${entityQuery}`);
 
           const entityRes = await fetch(INDEXER_URL, {
             method: "POST",
@@ -254,28 +254,28 @@ export class ClaimFieldCommand implements CommandHandler {
           });
 
           let hasAccessGroup = false;
-          console.log(`[claimfield-check] HTTP response status: ${entityRes.status}`);
+          console.log(`[claimmachine-check] HTTP response status: ${entityRes.status}`);
 
           if (entityRes.ok) {
             const entityJson = await entityRes.json();
-            console.log(`[claimfield-check] Response JSON:`, entityJson);
+            console.log(`[claimmachine-check] Response JSON:`, entityJson);
             const entityRows = entityJson?.result?.[0];
             hasAccessGroup = Array.isArray(entityRows) && entityRows.length >= 2;
-            console.log(`[claimfield-check] Has access group: ${hasAccessGroup}`);
+            console.log(`[claimmachine-check] Has access group: ${hasAccessGroup}`);
           } else {
             const errorText = await entityRes.text();
-            console.log(`[claimfield-check] HTTP error: ${entityRes.status} - ${errorText}`);
+            console.log(`[claimmachine-check] HTTP error: ${entityRes.status} - ${errorText}`);
           }
 
           if (!hasAccessGroup) {
             window.dispatchEvent(new CustomEvent<string>("worker-log", {
-              detail: `❌ Your session address doesn't own a forcefield, you aren't standing in a forcefield, and you are not standing on a machine block. No changes made.`,
+              detail: `❌ You aren't standing on a machine block with access control. No changes made.`,
             }));
             return;
           }
         }
         
-        // If we get here, there's either a force field or a machine block to claim
+        // If we get here, there's a machine block to claim
         // Continue with the claiming logic...
       } catch (error) {
         window.dispatchEvent(new CustomEvent<string>("worker-log", {
@@ -286,9 +286,9 @@ export class ClaimFieldCommand implements CommandHandler {
     }
     
     try {
-      // Parse coordinates if provided: "claimfield x y z"
+      // Parse coordinates if provided: "claimmachine x y z"
       let targetPos: Vec3 | null = null;
-      
+
       if (args.length > 0) {
         const coords = args.map(Number);
         if (coords.length === 3 && coords.every((n: number) => !isNaN(n))) {
@@ -296,37 +296,41 @@ export class ClaimFieldCommand implements CommandHandler {
         }
       }
 
-      let ff: ForceFieldInfo;
-      if (targetPos) {
-        console.log(`[claimfield] Getting force field info for coordinates: ${targetPos}`);
-        ff = await getForceFieldInfo(targetPos);
-      } else {
-        console.log(`[claimfield] Getting force field info for player: ${context.address}`);
-        ff = await getForceFieldInfoForPlayer(context.address);
-      }
-
-      console.log(`[claimfield] Force field info:`, {
-        active: ff.active,
-        forceField: ff.forceField,
-        fragmentId: ff.fragmentId,
-        owner: ff.owner,
-        reason: ff.reason
-      });
-
       let machine: `0x${string}`;
       let coordsForLog: Vec3 | null = null;
 
-      if (ff.forceField !== ZERO_ENTITY_ID) {
-        // Use the existing machine entity
-        machine = ff.forceField;
-        console.log(`[claimfield] Using existing force field entity: ${machine}`);
-      } else {
-        // No force field detected yet — fall back to block beneath the player
-        const pos = await fetchPlayerBlock(context.address);
-        if (!pos) throw new Error("No position found — try 'spawn' first.");
-        coordsForLog = [pos[0], pos[1] - 1, pos[2]];
+      if (targetPos) {
+        // Coordinates provided - always treat as spawntile/machine block coordinates
+        // (even if there's a force field covering the area, we want the spawntile at those coordinates)
+        console.log(`[claimmachine] Working directly with spawntile at provided coordinates: ${targetPos}`);
+        coordsForLog = targetPos;
         machine = encodeBlock(coordsForLog);
-        console.log(`[claimfield] Using encoded block entity: ${machine} at (${coordsForLog[0]}, ${coordsForLog[1]}, ${coordsForLog[2]})`);
+        console.log(`[claimmachine] Using provided coordinates for spawntile: ${machine} at (${coordsForLog[0]}, ${coordsForLog[1]}, ${coordsForLog[2]})`);
+      } else {
+        // No coordinates provided - check current location for force field or machine block
+        console.log(`[claimmachine] Getting force field info for player: ${context.address}`);
+        const ff = await getForceFieldInfoForPlayer(context.address);
+
+        console.log(`[claimmachine] Force field info:`, {
+          active: ff.active,
+          forceField: ff.forceField,
+          fragmentId: ff.fragmentId,
+          owner: ff.owner,
+          reason: ff.reason
+        });
+
+        if (ff.forceField !== ZERO_ENTITY_ID) {
+          // Use the existing machine entity
+          machine = ff.forceField;
+          console.log(`[claimmachine] Using existing force field entity: ${machine}`);
+        } else {
+          // Fall back to block beneath the player
+          const pos = await fetchPlayerBlock(context.address);
+          if (!pos) throw new Error("No position found — try 'spawn' first.");
+          coordsForLog = [pos[0], pos[1] - 1, pos[2]];
+          machine = encodeBlock(coordsForLog);
+          console.log(`[claimmachine] Using encoded block entity: ${machine} at (${coordsForLog[0]}, ${coordsForLog[1]}, ${coordsForLog[2]})`);
+        }
       }
 
       // Get the session address that's actually making transactions
@@ -344,12 +348,12 @@ export class ClaimFieldCommand implements CommandHandler {
         name: "DefaultProgramSy",
       }) as `0x${string}`;
 
-      console.log(`[claimfield] Generated system ID: ${DEFAULT_PROGRAM_SYSTEM_ID} (length: ${DEFAULT_PROGRAM_SYSTEM_ID.length})`);
-      
+      console.log(`[claimmachine] Generated system ID: ${DEFAULT_PROGRAM_SYSTEM_ID} (length: ${DEFAULT_PROGRAM_SYSTEM_ID.length})`);
+
       // First, try to get the groupId for this machine entity
       const entityQuery = `SELECT "groupId" FROM "dfprograms_1__EntityAccessGrou" WHERE "entityId"='${machine}'`;
 
-      console.log(`[claimfield] Querying for access group: ${entityQuery}`);
+      console.log(`[claimmachine] Querying for access group: ${entityQuery}`);
 
       const entityRes = await fetch(INDEXER_URL, {
         method: "POST",
@@ -359,38 +363,34 @@ export class ClaimFieldCommand implements CommandHandler {
 
       let groupId: string | null = null;
 
-      console.log(`[claimfield] HTTP response status: ${entityRes.status}`);
+      console.log(`[claimmachine] HTTP response status: ${entityRes.status}`);
 
       if (entityRes.ok) {
         const entityJson = await entityRes.json();
-        console.log(`[claimfield] Response JSON:`, entityJson);
+        console.log(`[claimmachine] Response JSON:`, entityJson);
         const entityRows = entityJson?.result?.[0];
         if (Array.isArray(entityRows) && entityRows.length >= 2) {
           const [, ...entityValues] = entityRows;
           groupId = entityValues[0] as string;
-          console.log(`[claimfield] Found groupId: ${groupId}`);
+          console.log(`[claimmachine] Found groupId: ${groupId}`);
         } else {
-          console.log(`[claimfield] No group data found in response`);
+          console.log(`[claimmachine] No group data found in response`);
         }
       } else {
         const errorText = await entityRes.text();
-        console.log(`[claimfield] HTTP error: ${entityRes.status} - ${errorText}`);
+        console.log(`[claimmachine] HTTP error: ${entityRes.status} - ${errorText}`);
       }
 
       if (!groupId) {
-        // This force field doesn't have an access group yet (unowned)
-        // Generate a new group ID based on the machine entity ID
-        groupId = machine; // Use the machine entity ID as the group ID
-
-        window.dispatchEvent(new CustomEvent<string>("worker-log", {
-          detail: `🔍 Force field is unowned. Creating new access group: ${groupId}`,
-        }));
+        // No access group found for this machine entity ID
+        const coordsText = coordsForLog ? `(${coordsForLog.join(', ')})` : 'at this location';
+        throw new Error(`No access group found for machine ${coordsText}. This machine either doesn't exist, isn't set up for access control, or you don't have permission to access it.`);
       } else {
-        console.log(`[claimfield] Found existing group: ${groupId}`);
+        console.log(`[claimmachine] Found existing group: ${groupId}`);
 
         // Check who the actual owner of this group is
         const ownerQuery = `SELECT "owner" FROM "dfprograms_1__AccessGroupOwner" WHERE "groupId"='${groupId}'`;
-        console.log(`[claimfield] Checking group owner: ${ownerQuery}`);
+        console.log(`[claimmachine] Checking group owner: ${ownerQuery}`);
 
         const ownerRes = await fetch(INDEXER_URL, {
           method: "POST",
@@ -404,7 +404,7 @@ export class ClaimFieldCommand implements CommandHandler {
           const ownerRows = ownerJson?.result?.[0];
           if (Array.isArray(ownerRows) && ownerRows.length >= 2) {
             actualOwner = ownerRows[1][0] as string;
-            console.log(`[claimfield] Actual group owner: ${actualOwner}`);
+            console.log(`[claimmachine] Actual group owner: ${actualOwner}`);
           }
         }
 
@@ -412,7 +412,7 @@ export class ClaimFieldCommand implements CommandHandler {
         const sessionBytes32 = encodePlayerEntityId(sessionAddress);
         const memberQuery = `SELECT "hasAccess" FROM "dfprograms_1__AccessGroupMembe" WHERE "groupId"='${groupId}' AND "member"='${sessionBytes32}'`;
 
-        console.log(`[claimfield] Checking if session address is already a member: ${memberQuery}`);
+        console.log(`[claimmachine] Checking if session address is already a member: ${memberQuery}`);
 
         const memberRes = await fetch(INDEXER_URL, {
           method: "POST",
@@ -425,26 +425,26 @@ export class ClaimFieldCommand implements CommandHandler {
           const memberRows = memberJson?.result?.[0];
           if (Array.isArray(memberRows) && memberRows.length >= 2) {
             const hasAccess = memberRows[1][0]; // Get the hasAccess value
-            console.log(`[claimfield] Session address already has access: ${hasAccess}`);
+            console.log(`[claimmachine] Session address already has access: ${hasAccess}`);
 
             if (hasAccess) {
               window.dispatchEvent(new CustomEvent<string>("worker-log", {
-                detail: `✅ You already have access to this force field (group ${groupId}). Adding EOA address as additional member...`,
+                detail: `✅ You already have access to this machine (group ${groupId}). Adding EOA address as additional member...`,
               }));
             }
           }
         }
 
         // Check if EOA address is already a member
-        console.log(`[claimfield] context.address: ${context.address}`);
-        console.log(`[claimfield] sessionAddress: ${sessionAddress}`);
-        console.log(`[claimfield] eoaAddress: ${eoaAddress}`);
+        console.log(`[claimmachine] context.address: ${context.address}`);
+        console.log(`[claimmachine] sessionAddress: ${sessionAddress}`);
+        console.log(`[claimmachine] eoaAddress: ${eoaAddress}`);
         const eoaBytes32 = encodePlayerEntityId(eoaAddress);
-        console.log(`[claimfield] eoaBytes32: ${eoaBytes32}`);
-        console.log(`[claimfield] sessionBytes32: ${sessionBytes32}`);
+        console.log(`[claimmachine] eoaBytes32: ${eoaBytes32}`);
+        console.log(`[claimmachine] sessionBytes32: ${sessionBytes32}`);
         const eoaMemberQuery = `SELECT "hasAccess" FROM "dfprograms_1__AccessGroupMembe" WHERE "groupId"='${groupId}' AND "member"='${eoaBytes32}'`;
 
-        console.log(`[claimfield] Checking if EOA address is already a member: ${eoaMemberQuery}`);
+        console.log(`[claimmachine] Checking if EOA address is already a member: ${eoaMemberQuery}`);
 
         const eoaMemberRes = await fetch(INDEXER_URL, {
           method: "POST",
@@ -458,14 +458,14 @@ export class ClaimFieldCommand implements CommandHandler {
           const eoaMemberRows = eoaMemberJson?.result?.[0];
           if (Array.isArray(eoaMemberRows) && eoaMemberRows.length >= 2) {
             eoaHasAccess = eoaMemberRows[1][0]; // Get the hasAccess value
-            console.log(`[claimfield] EOA address already has access: ${eoaHasAccess}`);
+            console.log(`[claimmachine] EOA address already has access: ${eoaHasAccess}`);
           }
         }
 
         // If both addresses already have access, we're done
         if (eoaHasAccess) {
           window.dispatchEvent(new CustomEvent<string>("worker-log", {
-            detail: `✅ Both session and EOA addresses already have access to this force field (group ${groupId}). No changes needed.`,
+            detail: `✅ Both session and EOA addresses already have access to this machine (group ${groupId}). No changes needed.`,
           }));
           return;
         }
@@ -479,7 +479,7 @@ export class ClaimFieldCommand implements CommandHandler {
       // Use numeric group ID (not bytes32) and include caller parameter
       const groupIdNumeric = Number(groupId);
       const callerBytes32 = encodePlayerEntityId(sessionAddress);
-      console.log(`[claimfield] Using groupId ${groupIdNumeric}, caller: ${callerBytes32}`);
+      console.log(`[claimmachine] Using groupId ${groupIdNumeric}, caller: ${callerBytes32}`);
 
       // Step 1: Add session address as member (using caller, groupId, member, allowed signature)
       const setMembershipCallData = encodeFunctionData({
@@ -543,7 +543,7 @@ export class ClaimFieldCommand implements CommandHandler {
 
       const targetTxt = coordsForLog
         ? `machine at (${coordsForLog[0]}, ${coordsForLog[1]}, ${coordsForLog[2]})`
-        : `force field station ${machine}`;
+        : `machine ${machine}`;
 
       window.dispatchEvent(new CustomEvent<string>("worker-log", {
         detail: `🤝 Added session address as member to ${targetTxt} (group ${groupId}). Tx: ${sessionTx}`,
@@ -568,11 +568,11 @@ export class ClaimFieldCommand implements CommandHandler {
       }
       if (msg.includes("Target is not a smart entity")) {
         window.dispatchEvent(new CustomEvent("worker-log", {
-          detail: "❌ The block beneath you isn't a smart entity. Stand on your force-field station."
+          detail: "❌ The target isn't a smart entity. Make sure you're targeting a machine block."
         }));
         return;
       }
-      window.dispatchEvent(new CustomEvent("worker-log", { detail: `❌ claimfield failed: ${msg}` }));
+      window.dispatchEvent(new CustomEvent("worker-log", { detail: `❌ claimmachine failed: ${msg}` }));
     }
   }
 }

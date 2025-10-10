@@ -38,6 +38,7 @@ export class HelpCommand implements CommandHandler {
       '       [ClaimField x y z] expand access to specified force field to EOA account,',
       '  Other World Commands:',
       '       [Sleep] rest in a bed to guard health and energy,',
+      '       [Wakeup] awaken from bed to continue adventuring, or wakeup x y z to specify a location,',
       '       [Scan] search for nearby players, scan <radius> (default: 10),',
       '       [Loot] collect items at your feet, or at a specific coordinate, loot x y z,',
       '       [Chest] open chest at your feet, or at a specific coordinate, chest x y z,',
@@ -49,7 +50,8 @@ export class HelpCommand implements CommandHandler {
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',
       '  System: help/h, clear, balance/bal, players/who,',
       '  Debug: check forcefield ownership for EOA and session account',
-      '  Key Notes: When in explore looking for a space to move, if you see only AIR in a direction, you will take significant damage. Try placing a block first!'
+      '  Key Notes: When in explore looking for a space to move, if you see only AIR in a direction, you will take significant damage. Try placing a block first!',
+      '  Dangers of Batch Mining.  Dont do it for ores! You will die!'
     ];
     
     for (const line of helpText) {

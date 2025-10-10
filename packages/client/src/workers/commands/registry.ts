@@ -34,6 +34,7 @@ import { LootCommand } from './loot';
 import { ChestCommand } from './chest';
 import { DelegateCommand } from './council';
 import { ClaimFieldCommand } from './fieldmanager';
+import { WakeupCommand } from './wakeup';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -69,6 +70,7 @@ commands.set('scan', new ScanCommand());
 commands.set('loot', new LootCommand());
 commands.set('chest', new ChestCommand());
 commands.set('claimfield', new ClaimFieldCommand());
+commands.set('wakeup', new WakeupCommand());
 
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"

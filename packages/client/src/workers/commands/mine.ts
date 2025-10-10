@@ -4,11 +4,35 @@ import { coordToChunkCoord, initChunkCommit, packCoord96, fulfillChunkCommit, ge
 import { addToQueue, queueSizeByAction } from "../../commandQueue";
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
 import { queryIndexer } from './queryIndexer';
+import { resourceToHex } from '@latticexyz/common';
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
 const POSITION_TABLE = "EntityPosition";
+
+// Correct system ID with empty namespace
+const MINE_SYSTEM_ID = resourceToHex({
+  type: "system",
+  namespace: "",
+  name: "MineSystem",
+}) as `0x${string}`;
+
+// MineSystem ABI for inner calls
+const MineSystemAbi = [
+  {
+    type: "function",
+    name: "mineUntilDestroyed",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "caller", type: "bytes32" },
+      { name: "coord", type: "uint96" },
+      { name: "toolSlot", type: "uint16" },  // ✅ Fixed: uint16 not uint256
+      { name: "extraData", type: "bytes" }
+    ],
+    outputs: []
+  }
+] as const;
 
 function encodePlayerEntityId(address: string): `0x${string}` {
   const prefix = "01";
@@ -169,6 +193,78 @@ export class MineCommand implements CommandHandler {
         // Skip this chunk if query fails completely
         continue;
       }
+    }
+  }
+
+  // Add batch mining method
+  static async batchMineWithTool(
+    context: CommandContext,
+    blocks: Array<{ x: number, y: number, z: number }>,
+    equippedTool: { slot: number; type: string; name: string }
+  ): Promise<void> {
+    const entityId = encodePlayerEntityId(context.address);
+
+    // Build array of objects with systemId and callData properties
+    const calls: Array<{ systemId: `0x${string}`; callData: `0x${string}` }> = blocks.map(({ x, y, z }) => {
+      const packedCoord = packCoord96(x, y, z); // returns bigint (uint96)
+
+      const callData = encodeFunctionData({
+        abi: MineSystemAbi,                    // ✅ System ABI with correct uint16
+        functionName: "mineUntilDestroyed",    // canonical system fn
+        args: [entityId, packedCoord, equippedTool.slot, "0x"],  // slot is number, will be cast to uint16
+      });
+
+      return {
+        systemId: MINE_SYSTEM_ID,
+        callData
+      };
+    });
+
+    try {
+      // Outer encode with the *World* ABI
+      const batchData = encodeFunctionData({
+        abi: IWorldAbi,
+        functionName: "batchCall",
+        args: [calls],
+      });
+
+      const txHash = await context.sessionClient.sendTransaction({
+        to: WORLD_ADDRESS,
+        data: batchData,
+        gas: BigInt(350_000) * BigInt(blocks.length), // nudge up per call
+      });
+
+      window.dispatchEvent(
+        new CustomEvent("worker-log", {
+          detail: `⛏️ Batch mined ${blocks.length} blocks using ${equippedTool.type}. Tx: ${txHash}`,
+        })
+      );
+    } catch (error) {
+      const errorMessage = String(error);
+      
+      // Check for specific batch mining errors
+      if (errorMessage.includes('0xfbf10ce6')) {
+        throw new Error('One or more blocks cannot be mined (may be unreachable or not mineable)');
+      }
+      
+      // Check for gas issues
+      if (errorMessage.includes('0x34a44dbe') || errorMessage.includes('gas limit too low')) {
+        throw new Error('Insufficient gas for batch operation');
+      }
+      
+      // Check for chunk commitment issues
+      if (errorMessage.includes('No chunk commitment') || 
+          errorMessage.includes('4e6f206368756e6b20636f6d6d69746d656e7400000000000000000000000000')) {
+        throw new Error('Chunk commitment issues detected');
+      }
+      
+      // Check for simulation revert
+      if (errorMessage.includes('reverted during simulation')) {
+        throw new Error('Transaction would revert (blocks may be unreachable or protected)');
+      }
+      
+      // Generic batch error
+      throw new Error(`${errorMessage.split('\n')[0]}`);
     }
   }
 

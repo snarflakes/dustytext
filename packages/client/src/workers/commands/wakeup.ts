@@ -44,8 +44,9 @@ export class WakeupCommand implements CommandHandler {
     const log = (detail: string) =>
       window.dispatchEvent(new CustomEvent("worker-log", { detail }));
 
+    const caller = encodePlayerEntityId(context.address);
+
     try {
-      const caller = encodePlayerEntityId(context.address);
       let spawnCoord: bigint;
 
       // Check if coordinates were provided as arguments
@@ -105,6 +106,67 @@ export class WakeupCommand implements CommandHandler {
         return;
       }
       
+      // Check for "Cannot spawn on a non-passable block" error
+      if (msg.includes('43616e6e6f7420737061776e206f6e2061206e6f6e2d7061737361626c6520626c6f636b') ||
+          msg.includes('Cannot spawn on a non-passable block')) {
+        window.dispatchEvent(
+          new CustomEvent("worker-log", { detail: `❌ Cannot wake up at those coordinates - there's a solid block there. Try coordinates with air or water blocks.` })
+        );
+        return;
+      }
+      
+      // If wakeup failed and we have coordinates, try removeDeadPlayerFromBed as fallback
+      if (args.length >= 3) {
+        const x = parseInt(args[0], 10);
+        const y = parseInt(args[1], 10);
+        const z = parseInt(args[2], 10);
+        
+        if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+          log("🛏️ Wakeup failed, trying to remove from bed...");
+          
+          try {
+            // Try original coordinates first
+            const dropCoord = packCoord96(x, y, z);
+            const data = encodeFunctionData({
+              abi: IWorldAbi,
+              functionName: "removeDeadPlayerFromBed",
+              args: [caller, dropCoord],
+            });
+
+            const txHash = await context.sessionClient.sendTransaction({
+              to: WORLD_ADDRESS,
+              data,
+              gas: 300000n,
+            });
+
+            log(`🛏️ Removed from bed at (${x}, ${y}, ${z}). Tx: ${txHash}`);
+            return;
+          } catch (fallbackErr) {
+            // Try one position up (Y+1)
+            try {
+              log("🛏️ Trying one block higher...");
+              const dropCoord = packCoord96(x, y + 1, z);
+              const data = encodeFunctionData({
+                abi: IWorldAbi,
+                functionName: "removeDeadPlayerFromBed",
+                args: [caller, dropCoord],
+              });
+
+              const txHash = await context.sessionClient.sendTransaction({
+                to: WORLD_ADDRESS,
+                data,
+                gas: 300000n,
+              });
+
+              log(`🛏️ Removed from bed at (${x}, ${y + 1}, ${z}). Tx: ${txHash}`);
+              return;
+            } catch (finalErr) {
+              log(`❌ Could not remove from bed: ${finalErr instanceof Error ? finalErr.message : String(finalErr)}`);
+            }
+          }
+        }
+      }
+      
       // Check for gas limit error
       if (msg.includes('0x34a44dbe') || 
           msg.includes('gas limit too low')) {
@@ -129,4 +191,8 @@ export class WakeupCommand implements CommandHandler {
     }
   }
 }
+
+
+
+
 

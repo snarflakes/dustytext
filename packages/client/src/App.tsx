@@ -398,8 +398,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'plant' || command.startsWith('plant ')) {
       runCommand(command.trim());
-    } else if (command === 'projectfield' || command === 'pf') {
-      runCommand('projectfield');
+    } else if (command === 'projectfield' || command === 'pf' || command.startsWith('projectfield ') || command.startsWith('pf ')) {
+      runCommand(command.trim());
     } else if (command === 'claimfield' || command === 'cf' || command.startsWith('claimfield ') || command.startsWith('cf ')) {
       runCommand(command.trim());
     } else if (command === 'sleep') {

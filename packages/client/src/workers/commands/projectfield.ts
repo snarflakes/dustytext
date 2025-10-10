@@ -89,23 +89,46 @@ function encodeBlock(pos: Vec3): Hex32 {
 
 /* ---------------------- Command ---------------------- */
 export class ProjectFieldCommand implements CommandHandler {
-  async execute(context: CommandContext): Promise<void> {
+  async execute(context: CommandContext, ...args: string[]): Promise<void> {
     try {
-      // Find the force field machine entity at the player's location
-      const forceFieldInfo = await getForceFieldInfoForPlayer(context.address);
       let targetEntityId: `0x${string}`;
-      let targetCoords: Vec3 = [0, 0, 0]; // Default coords for logging
+      let targetCoords: Vec3 = [0, 0, 0];
       
-      if (forceFieldInfo.forceField !== ZERO_ENTITY_ID) {
-        // Use the existing machine entity
-        targetEntityId = forceFieldInfo.forceField;
-        // We don't know exact coords for existing machine, use default
-      } else {
-        // No force field found - need to target the block beneath player for new attachment
-        const pos = await fetchPlayerBlock(context.address);
-        if (!pos) throw new Error("You float amongst the stars. Try 'spawn' first.");
-        targetCoords = [pos[0], pos[1] - 1, pos[2]];
+      // Check if coordinates were provided as arguments
+      if (args.length >= 3) {
+        const x = parseInt(args[0], 10);
+        const y = parseInt(args[1], 10);
+        const z = parseInt(args[2], 10);
+        
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+          window.dispatchEvent(new CustomEvent<string>("worker-log", {
+            detail: `❌ Invalid coordinates. Usage: projectfield x y z`
+          }));
+          return;
+        }
+        
+        // Use specified coordinates directly, bypass force field detection
+        targetCoords = [x, y, z];
         targetEntityId = encodeBlock(targetCoords);
+        
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `🎯 Targeting specific coordinates (${x}, ${y}, ${z}) for Force Field attachment.`
+        }));
+      } else {
+        // Original behavior: Find the force field machine entity at the player's location
+        const forceFieldInfo = await getForceFieldInfoForPlayer(context.address);
+        
+        if (forceFieldInfo.forceField !== ZERO_ENTITY_ID) {
+          // Use the existing machine entity
+          targetEntityId = forceFieldInfo.forceField;
+          // We don't know exact coords for existing machine, use default
+        } else {
+          // No force field found - need to target the block beneath player for new attachment
+          const pos = await fetchPlayerBlock(context.address);
+          if (!pos) throw new Error("You float amongst the stars. Try 'spawn' first.");
+          targetCoords = [pos[0], pos[1] - 1, pos[2]];
+          targetEntityId = encodeBlock(targetCoords);
+        }
       }
 
       const caller = encodePlayerEntityId(context.address);

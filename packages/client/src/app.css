@@ -355,3 +355,14 @@ button[data-testid*="connect"]:hover {
   background-color: rgba(139, 115, 85, 0.2) !important;
 }
 
+.clickable-block.machine {
+  color: #DDA0DD !important; /* Light purple color */
+  background-color: rgba(221, 160, 221, 0.1) !important;
+}
+
+.clickable-block.machine:hover {
+  color: #BA55D3 !important;
+  background-color: rgba(221, 160, 221, 0.2) !important;
+}
+
+

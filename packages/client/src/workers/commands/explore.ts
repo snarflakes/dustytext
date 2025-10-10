@@ -103,12 +103,16 @@ function createClickableBlock(block: SelectableBlock): string {
   const isPassableVegetation = ["switchgrass", "fescue", "vines", "hempbush", "cottonbush", "bamboobush", "flower", "wheatseed"].some(plant => 
     block.name.toLowerCase().includes(plant.toLowerCase())
   );
+  const isMachine = ["workbench", "powerstone", "forcefield machine", "furnace", "spawntile", "bed", "chest"].some(machine => 
+    block.name.toLowerCase().includes(machine.toLowerCase())
+  );
 
   // Build class string
   const airClass = isAir ? " air-block" : "";
   const grownClass = isGrownWheat ? " grown" : "";
   const passableClass = isPassableVegetation ? " passable-vegetation" : "";
-  const cls = `clickable-block${airClass}${grownClass}${passableClass}`;
+  const machineClass = isMachine ? " machine" : "";
+  const cls = `clickable-block${airClass}${grownClass}${passableClass}${machineClass}`;
 
   const link = `<span class="${cls}"
       data-block='${JSON.stringify(block)}'

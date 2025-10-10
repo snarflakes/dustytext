@@ -404,6 +404,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'sleep') {
       runCommand('sleep');
+    } else if (command === 'wakeup' || command.startsWith('wakeup ')) {
+      runCommand(command.trim());
     } else if (command === 'scan' || command.startsWith('scan ')) {
       runCommand(command.trim());
     } else if (command === 'loot' || command.startsWith('loot ')) {

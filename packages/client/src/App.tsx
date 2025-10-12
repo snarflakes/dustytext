@@ -242,10 +242,8 @@ export function App() {
       try {
         const status = await getHealthStatus(sessionAddress);
         console.log('Health status received:', status);
-        // Only update if we got valid data (not a fetch error)
-        if (status.isAlive || status.lifePercentage > 0 || status.energy > 0n) {
-          setHealthStatus(status);
-        }
+        // Always update health status, even if dead
+        setHealthStatus(status);
       } catch (error) {
         console.log('Health status fetch failed, keeping previous status:', error);
         // Don't update healthStatus on error - keep previous value
@@ -262,6 +260,50 @@ export function App() {
       console.log('Health polling interval cleared');
       clearInterval(interval);
     };
+  }, [sessionClient, isConnected]);
+
+  // Update health after specific commands with rate limiting
+  useEffect(() => {
+    let lastHealthUpdate = 0;
+    const MIN_UPDATE_INTERVAL = 10000; // 10 seconds
+
+    const updateHealthAfterCommand = async () => {
+      const now = Date.now();
+      if (now - lastHealthUpdate < MIN_UPDATE_INTERVAL) {
+        console.log('Health update skipped - too soon since last update');
+        return;
+      }
+
+      const sessionAddress = sessionClient?.account?.address || 
+                            (typeof sessionClient?.account === 'string' ? sessionClient.account : null);
+      
+      if (!sessionAddress || !isConnected) return;
+      
+      try {
+        const status = await getHealthStatus(sessionAddress);
+        setHealthStatus(status);
+        lastHealthUpdate = now;
+        console.log('Health updated after command');
+      } catch (error) {
+        console.log('Health update after command failed:', error);
+      }
+    };
+
+    const onWorkerLog = (e: Event) => {
+      const ce = e as CustomEvent<string>;
+      const line = String(ce.detail ?? "");
+      
+      // Update health after energy-consuming commands
+      if (line.includes("⛏️") || // mine
+          line.includes("🚶") || // move  
+          line.includes("🏗️") || // build
+          line.includes("💧")) { // water
+        setTimeout(updateHealthAfterCommand, 1000); // Small delay to let blockchain update
+      }
+    };
+
+    window.addEventListener("worker-log", onWorkerLog as EventListener);
+    return () => window.removeEventListener("worker-log", onWorkerLog as EventListener);
   }, [sessionClient, isConnected]);
 
   // Update equipped tool when equip/unequip commands are executed

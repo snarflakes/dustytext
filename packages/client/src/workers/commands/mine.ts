@@ -150,6 +150,7 @@ export class MineCommand implements CommandHandler {
             if (errorMessage.includes('Not yet fulfillable') ||
                 errorMessage.includes('4e6f74207965742066756c66696c6c61626c6500000000000000000000000000')) {
               console.warn(`Chunk (${cx},${cy},${cz}) not yet fulfillable, will retry during mining`);
+              // Don't throw - let mining proceed and handle this during mining attempts
             } else if (errorMessage.includes('Existing chunk commitment') ||
                        errorMessage.includes('4578697374696e67206368756e6b20636f6d6d69746d656e74')) {
               console.log(`Chunk (${cx},${cy},${cz}) already has valid commitment`);
@@ -159,6 +160,8 @@ export class MineCommand implements CommandHandler {
               await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
               const newRound = await getCurrentRound();
               await waitForRoundAvailable(newRound);
+              // Wait longer before trying to fulfill after re-init
+              await new Promise(resolve => setTimeout(resolve, 5000));
               await fulfillChunkCommit(context.sessionClient, WORLD_ADDRESS, cx, cy, cz, newRound);
               console.log(`Chunk (${cx},${cy},${cz}) re-initialized and fulfilled`);
             }
@@ -173,6 +176,8 @@ export class MineCommand implements CommandHandler {
             await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
             const committedRound = await getCurrentRound();
             await waitForRoundAvailable(committedRound);
+            // Wait longer after initialization before fulfilling
+            await new Promise(resolve => setTimeout(resolve, 8000));
             await fulfillChunkCommit(context.sessionClient, WORLD_ADDRESS, cx, cy, cz, committedRound);
             console.log(`Chunk (${cx},${cy},${cz}) initialized and fulfilled`);
           } catch (error) {
@@ -180,7 +185,7 @@ export class MineCommand implements CommandHandler {
             // Check for "Not yet fulfillable" error during chunk commitment
             if (errorMessage.includes('Not yet fulfillable') ||
                 errorMessage.includes('4e6f74207965742066756c66696c6c61626c6500000000000000000000000000')) {
-              console.warn(`Chunk (${cx},${cy},${cz}) not yet fulfillable, will retry during mining`);
+              console.warn(`Chunk (${cx},${cy},${cz}) not yet fulfillable after init, will retry during mining`);
               // Don't throw - let mining proceed and handle this during mining attempts
               return;
             }
@@ -606,6 +611,8 @@ export class MineCommand implements CommandHandler {
               await initChunkCommit(context.sessionClient, WORLD_ADDRESS, entityId, cx, cy, cz);
               const newRound = await getCurrentRound();
               await waitForRoundAvailable(newRound);
+              // Wait longer before fulfilling after re-init
+              await new Promise(resolve => setTimeout(resolve, 8000));
               await fulfillChunkCommit(context.sessionClient, WORLD_ADDRESS, cx, cy, cz, newRound);
               console.log(`Chunk (${cx},${cy},${cz}) re-initialized and fulfilled`);
 
@@ -614,6 +621,13 @@ export class MineCommand implements CommandHandler {
               continue; // Retry the mining attempt
 
             } catch (reinitError) {
+              const reinitErrorMsg = String(reinitError);
+              if (reinitErrorMsg.includes('Not yet fulfillable') ||
+                  reinitErrorMsg.includes('4e6f74207965742066756c66696c6c61626c6500000000000000000000000000')) {
+                console.warn(`Chunk not yet fulfillable after init, will retry during mining`);
+                // Don't throw - let mining proceed and handle this during mining attempts
+                continue;
+              }
               console.warn(`Failed to re-initialize chunk commitment:`, reinitError);
               throw reinitError;
             }
@@ -642,6 +656,16 @@ export class MineCommand implements CommandHandler {
           }
         }
         
+        // Check for UserOperation simulation errors with chunk commitment expired (hex encoded)
+        if (errorMessage.includes('UserOperation reverted during simulation') && 
+            (errorMessage.includes('Chunk commitment expired') ||
+             errorMessage.includes('0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000184368756e6b20636f6d6d69746d656e7420657870697265640000000000000000'))) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ Mining failed: Chunk commitment expired during simulation. Try again.` 
+          }));
+          return;
+        }
+        
         if (attempt === maxRetries) {
           window.dispatchEvent(new CustomEvent("worker-log", {
             detail: `❌ Mine failed after ${maxRetries} attempts: ${error}`
@@ -658,6 +682,10 @@ export class MineCommand implements CommandHandler {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify([{ address: WORLD_ADDRESS, query: posQuery }]),
     });
+
+    if (!posRes.ok) {
+      throw new Error(`Position fetch failed: ${posRes.status}`);
+    }
 
     const posJson = await posRes.json();
     const posRows = posJson?.result?.[0];

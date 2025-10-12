@@ -189,6 +189,36 @@ export class EnergizeCommand implements CommandHandler {
       );
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
+      
+      // Check for "Slot is not fuel" error
+      if (msg.includes('536c6f74206973206e6f74206675656c') ||
+          msg.includes('Slot is not fuel')) {
+        window.dispatchEvent(
+          new CustomEvent<string>("worker-log", {
+            detail: "❌ The equipped item is not a valid fuel source. You need to equip Batteries or another fuel item to energize the Force Field Station.",
+          }),
+        );
+        return;
+      }
+      
+      // Check for gas limit error
+      if (msg.includes('0x34a44dbe') || 
+          msg.includes('gas limit too low')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+        }));
+        return;
+      }
+      
+      // Check for energy error (player is dead)
+      if (msg.includes('Entity has no energy') || 
+          msg.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
+        }));
+        return;
+      }
+      
       window.dispatchEvent(
         new CustomEvent<string>("worker-log", { detail: `❌ Energize failed: ${msg}` }),
       );

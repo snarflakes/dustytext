@@ -166,7 +166,7 @@ export class ChestCommand implements CommandHandler {
         
         position = { x, y, z };
       } else {
-        // Use player's current position
+        // Use player's current position - look at block beneath player
         const playerEntityId = encodePlayerEntityId(context.address);
         const playerPos = await getPlayerPosition(playerEntityId);
         if (!playerPos) {
@@ -175,7 +175,8 @@ export class ChestCommand implements CommandHandler {
           }));
           return;
         }
-        position = playerPos;
+        // Look at the block beneath the player (where chests are typically placed)
+        position = { x: playerPos.x, y: playerPos.y - 1, z: playerPos.z };
       }
 
       const blockEntityId = encodeBlock([position.x, position.y, position.z]);

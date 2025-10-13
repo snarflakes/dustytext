@@ -365,4 +365,16 @@ button[data-testid*="connect"]:hover {
   background-color: rgba(221, 160, 221, 0.2) !important;
 }
 
+.clickable-block.water {
+  color: #87CEEB !important; /* Light blue color */
+  background-color: rgba(135, 206, 235, 0.1) !important;
+  font-style: italic !important;
+}
+
+.clickable-block.water:hover {
+  color: #4682B4 !important;
+  background-color: rgba(135, 206, 235, 0.2) !important;
+}
+
+
 

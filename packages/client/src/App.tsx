@@ -1,3 +1,4 @@
+
 import { AccountButton, useSessionClient } from "@latticexyz/entrykit/internal";
 import { runCommand, setSessionClient } from "./workers";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -242,10 +243,8 @@ export function App() {
       try {
         const status = await getHealthStatus(sessionAddress);
         console.log('Health status received:', status);
-        // Only update if we got valid data (not a fetch error)
-        if (status.isAlive || status.lifePercentage > 0 || status.energy > 0n) {
-          setHealthStatus(status);
-        }
+        // Always update health status, even if dead
+        setHealthStatus(status);
       } catch (error) {
         console.log('Health status fetch failed, keeping previous status:', error);
         // Don't update healthStatus on error - keep previous value
@@ -262,6 +261,51 @@ export function App() {
       console.log('Health polling interval cleared');
       clearInterval(interval);
     };
+  }, [sessionClient, isConnected]);
+
+  // Update health after specific commands with rate limiting
+  useEffect(() => {
+    let lastHealthUpdate = 0;
+    const MIN_UPDATE_INTERVAL = 10000; // 10 seconds
+
+    const updateHealthAfterCommand = async () => {
+      const now = Date.now();
+      if (now - lastHealthUpdate < MIN_UPDATE_INTERVAL) {
+        console.log('Health update skipped - too soon since last update');
+        return;
+      }
+
+      const sessionAddress = sessionClient?.account?.address || 
+                            (typeof sessionClient?.account === 'string' ? sessionClient.account : null);
+      
+      if (!sessionAddress || !isConnected) return;
+      
+      try {
+        const status = await getHealthStatus(sessionAddress);
+        setHealthStatus(status);
+        lastHealthUpdate = now;
+        console.log('Health updated after command');
+      } catch (error) {
+        console.log('Health update after command failed:', error);
+      }
+    };
+
+    const onWorkerLog = (e: Event) => {
+      const ce = e as CustomEvent<string>;
+      const line = String(ce.detail ?? "");
+      
+      // Update health after energy-consuming commands
+      if (line.includes("⛏️") || // mine
+          line.includes("🚶") || // move (single)
+          line.includes("🏃") || // move (multi/run)
+          line.includes("🏗️") || // build
+          line.includes("💧")) { // water
+        setTimeout(updateHealthAfterCommand, 1000); // Small delay to let blockchain update
+      }
+    };
+
+    window.addEventListener("worker-log", onWorkerLog as EventListener);
+    return () => window.removeEventListener("worker-log", onWorkerLog as EventListener);
   }, [sessionClient, isConnected]);
 
   // Update equipped tool when equip/unequip commands are executed
@@ -292,6 +336,41 @@ export function App() {
     e.preventDefault();
     const raw = input.trim();
     const command = raw.toLowerCase(); // routing only
+
+    // Check if we're in chest interaction FIRST
+    if ((globalThis as any).chestInteraction) {
+      const { ChestCommand } = await import('./workers/commands/chest');
+      const chestState = (globalThis as any).chestInteraction;
+      
+      if (chestState.awaitingAction) {
+        await ChestCommand.handleActionSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      } else if (chestState.awaitingTakeSlot) {
+        await ChestCommand.handleTakeSlotSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      } else if (chestState.awaitingTakeAmount) {
+        await ChestCommand.handleAmountSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      } else if (chestState.awaitingPlaceSlot) {
+        await ChestCommand.handlePlaceSlotSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      } else if (chestState.awaitingPlaceAmount) {
+        await ChestCommand.handleAmountSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      }
+      setInput('');
+      return;
+    }
 
     // If we're mid registerai wizard, forward RAW (preserve casing)
     if (isInRegisterAISetup()) {
@@ -402,6 +481,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'claimfield' || command === 'cf' || command.startsWith('claimfield ') || command.startsWith('cf ')) {
       runCommand(command.trim());
+    } else if (command === 'claimmachine' || command === 'cf' || command.startsWith('claimmachine ') || command.startsWith('claimfield ') || command.startsWith('cf ')) {
+      runCommand(command.trim());
     } else if (command === 'sleep') {
       runCommand('sleep');
     } else if (command === 'wakeup' || command.startsWith('wakeup ')) {
@@ -410,8 +491,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'loot' || command.startsWith('loot ')) {
       runCommand(command.trim());            
-    } else if (command === 'chest' || command === 'look in chest') {
-      runCommand('chest');
+    } else if (command === 'chest' || command === 'look in chest' || command.startsWith('chest ')) {
+      runCommand(command.trim());
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

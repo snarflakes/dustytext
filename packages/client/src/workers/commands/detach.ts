@@ -1,6 +1,7 @@
 // detach.ts
 import { encodeFunctionData } from "viem";
 import { CommandHandler, CommandContext } from "./types";
+import { resourceToHex } from "@latticexyz/common";
 import { getForceFieldInfoForPlayer, invalidateForceFieldFragment } from "./sense";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 
@@ -9,6 +10,31 @@ const WORLD_ADDRESS  = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const INDEXER_URL    = "https://indexer.mud.redstonechain.com/q";
 const POSITION_TABLE = "EntityPosition";
 const ZERO_ENTITY_ID = "0x0000000000000000000000000000000000000000000000000000000000000000" as `0x${string}`;
+
+/* ---------------------- Block entityId encoder ---------------------- */
+const BYTES_32_BITS = 256n;
+const TYPE_BITS     = 8n;
+const ID_BITS       = BYTES_32_BITS - TYPE_BITS; // 248
+const VEC3_BITS     = 96n;
+const ENTITY_TYPE_BLOCK = 0x03;
+
+function toU32(n: number): bigint {
+  return BigInt.asUintN(32, BigInt(n));
+}
+function packVec3([x, y, z]: [number, number, number]): bigint {
+  return (toU32(x) << 64n) | (toU32(y) << 32n) | toU32(z);
+}
+function encode(type: number, data: bigint): `0x${string}` {
+  const v   = (BigInt(type) << ID_BITS) | data;
+  const hex = v.toString(16).padStart(64, "0");
+  return (`0x${hex}`) as `0x${string}`;
+}
+function encodeCoord(type: number, coord: [number, number, number]): `0x${string}` {
+  return encode(type, packVec3(coord) << (ID_BITS - VEC3_BITS));
+}
+function encodeBlock(pos: [number, number, number]): `0x${string}` {
+  return encodeCoord(ENTITY_TYPE_BLOCK, pos);
+}
 
 /* ---------------------- Utilities ---------------------- */
 function encodePlayerEntityId(address: string): `0x${string}` {
@@ -104,13 +130,33 @@ async function getAttachedProgram(entityId: `0x${string}`): Promise<`0x${string}
 export class DetachProgramCommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
     try {
-      // Target resolution priority:
-      // 1) explicit entityId arg
-      // 2) force field machine from sense module
-      let targetEntityId: `0x${string}` | null =
-        isHexEntityId(args[0]) ? (args[0].toLowerCase() as `0x${string}`) : null;
-
-      if (!targetEntityId) {
+      let targetEntityId: `0x${string}`;
+      let targetCoords: [number, number, number] = [0, 0, 0];
+      
+      // Check if coordinates were provided as arguments
+      if (args.length >= 3) {
+        const x = parseInt(args[0], 10);
+        const y = parseInt(args[1], 10);
+        const z = parseInt(args[2], 10);
+        
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+          window.dispatchEvent(new CustomEvent<string>("worker-log", {
+            detail: `❌ Invalid coordinates. Usage: detach x y z`
+          }));
+          return;
+        }
+        
+        // Use specified coordinates directly
+        targetCoords = [x, y, z];
+        targetEntityId = encodeBlock(targetCoords);
+        
+        window.dispatchEvent(new CustomEvent<string>("worker-log", {
+          detail: `🎯 Targeting specific coordinates (${x}, ${y}, ${z}) for program detachment.`
+        }));
+      } else if (isHexEntityId(args[0])) {
+        // Explicit entityId provided
+        targetEntityId = args[0].toLowerCase() as `0x${string}`;
+      } else {
         // Use the sense module to find force field info
         const forceFieldInfo = await getForceFieldInfoForPlayer(context.address);
         if (forceFieldInfo.forceField !== ZERO_ENTITY_ID) {
@@ -180,6 +226,34 @@ export class DetachProgramCommand implements CommandHandler {
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      
+      // Check for authorization error
+      if (msg.includes('43616c6c6572206e6f7420617574686f72697a656420746f2064657461636820746869732070726f6772616d') ||
+          msg.includes('Caller not authorized to detach this program')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `❌ You are not authorized to detach this program. Only the original attacher or machine owner can detach programs.` 
+        }));
+        return;
+      }
+      
+      // Check for gas limit error
+      if (msg.includes('0x34a44dbe') || 
+          msg.includes('gas limit too low')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+        }));
+        return;
+      }
+      
+      // Check for energy error (player is dead)
+      if (msg.includes('Entity has no energy') || 
+          msg.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `💀 You are dead. Spawn to be reborn.` 
+        }));
+        return;
+      }
+      
       window.dispatchEvent(
         new CustomEvent<string>("worker-log", { detail: `❌ detach failed: ${msg}` }),
       );

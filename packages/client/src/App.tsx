@@ -337,6 +337,41 @@ export function App() {
     const raw = input.trim();
     const command = raw.toLowerCase(); // routing only
 
+    // Check if we're in chest interaction FIRST
+    if ((globalThis as any).chestInteraction) {
+      const { ChestCommand } = await import('./workers/commands/chest');
+      const chestState = (globalThis as any).chestInteraction;
+      
+      if (chestState.awaitingAction) {
+        await ChestCommand.handleActionSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      } else if (chestState.awaitingTakeSlot) {
+        await ChestCommand.handleTakeSlotSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      } else if (chestState.awaitingTakeAmount) {
+        await ChestCommand.handleAmountSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      } else if (chestState.awaitingPlaceSlot) {
+        await ChestCommand.handlePlaceSlotSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      } else if (chestState.awaitingPlaceAmount) {
+        await ChestCommand.handleAmountSelection({ 
+          address: address!, 
+          sessionClient: sessionClient as any 
+        }, raw);
+      }
+      setInput('');
+      return;
+    }
+
     // If we're mid registerai wizard, forward RAW (preserve casing)
     if (isInRegisterAISetup()) {
       setLog(prev => [...prev, `> [input received]`]);  // mask: don’t show secrets

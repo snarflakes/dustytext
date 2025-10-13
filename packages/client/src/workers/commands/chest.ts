@@ -97,16 +97,35 @@ async function getBlockInventory(blockEntityId: `0x${string}`) {
 }
 
 export class ChestCommand implements CommandHandler {
-  async execute(context: CommandContext): Promise<void> {
+  async execute(context: CommandContext, ...args: string[]): Promise<void> {
     try {
-      const playerEntityId = encodePlayerEntityId(context.address);
-      
-      const position = await getPlayerPosition(playerEntityId);
-      if (!position) {
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "❌ Could not determine your position" 
-        }));
-        return;
+      let position: { x: number, y: number, z: number };
+
+      // Check if coordinates were provided as arguments
+      if (args.length >= 3) {
+        const x = parseInt(args[0], 10);
+        const y = parseInt(args[1], 10);
+        const z = parseInt(args[2], 10);
+        
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: "❌ Invalid coordinates. Usage: chest [x y z]" 
+          }));
+          return;
+        }
+        
+        position = { x, y, z };
+      } else {
+        // Use player's current position
+        const playerEntityId = encodePlayerEntityId(context.address);
+        const playerPos = await getPlayerPosition(playerEntityId);
+        if (!playerPos) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: "❌ Could not determine your position" 
+          }));
+          return;
+        }
+        position = playerPos;
       }
 
       const blockEntityId = encodeBlock([position.x, position.y, position.z]);
@@ -126,7 +145,7 @@ export class ChestCommand implements CommandHandler {
       }).join('\n');
 
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `📦 Chest contents:\n${itemList}` 
+        detail: `📦 Chest contents at (${position.x}, ${position.y}, ${position.z}):\n${itemList}` 
       }));
 
     } catch (error) {

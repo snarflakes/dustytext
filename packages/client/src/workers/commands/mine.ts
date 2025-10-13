@@ -402,7 +402,7 @@ export class MineCommand implements CommandHandler {
         //const positionText = `(${mineX}, ${mineY}, ${mineZ})`;
         const toolText = hasToolEquipped ? ` using ${equippedTool.type}` : '';
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `✅ Mining${targetText} completed${toolText}. Tx: ${txHash}` 
+          detail: `⛏️ Mining${targetText} completed${toolText}. Tx: ${txHash}` 
         }));
         return;
         

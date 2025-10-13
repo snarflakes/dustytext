@@ -1,3 +1,4 @@
+
 import { AccountButton, useSessionClient } from "@latticexyz/entrykit/internal";
 import { runCommand, setSessionClient } from "./workers";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -295,7 +296,8 @@ export function App() {
       
       // Update health after energy-consuming commands
       if (line.includes("⛏️") || // mine
-          line.includes("🚶") || // move  
+          line.includes("🚶") || // move (single)
+          line.includes("🏃") || // move (multi/run)
           line.includes("🏗️") || // build
           line.includes("💧")) { // water
         setTimeout(updateHealthAfterCommand, 1000); // Small delay to let blockchain update
@@ -454,8 +456,8 @@ export function App() {
       runCommand(command.trim());
     } else if (command === 'loot' || command.startsWith('loot ')) {
       runCommand(command.trim());            
-    } else if (command === 'chest' || command === 'look in chest') {
-      runCommand('chest');
+    } else if (command === 'chest' || command === 'look in chest' || command.startsWith('chest ')) {
+      runCommand(command.trim());
     } else if (command.startsWith("'")) {
 
       // Handle speak command directly - remove the leading quote

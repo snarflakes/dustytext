@@ -200,7 +200,7 @@ export class MoveCommand implements CommandHandler {
           }
 
           window.dispatchEvent(new CustomEvent("worker-log", { 
-            detail: `✅ You ran ${moveDescription} ${elevationMessage}. Tx: ${txHash}` 
+            detail: `🏃 You ran ${moveDescription} ${elevationMessage}. Tx: ${txHash}` 
           }));
 
           // Auto-look after move

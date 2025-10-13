@@ -2,7 +2,7 @@
   <img src="https://github.com/user-attachments/assets/8548d4dd-6d34-44d6-8016-e3da2efaf1a0" alt="dusttext logosmallest" />
 </div>
 
-**DIVE into a text based MUD of yore, updated to the modern onchain DUST world. Energy is conserved. Death comes quick. So walk around and explore the beauty of the DUST world.  All through a custom narrative lens of biomes and terrain. Now insert an LLM for AI COOP gaming!** 
+### DIVE into a text based MUD of yore, updated to the modern onchain DUST world. Energy is conserved. Death comes quick. So walk around and explore the beauty of the DUST world.  All through a custom narrative lens of biomes and terrain. Now insert an LLM for AI COOP gaming!
 
 [![COOP mode demo](https://img.youtube.com/vi/AUYvukfKF5I/0.jpg)](https://www.youtube.com/watch?v=AUYvukfKF5I)
 
@@ -10,7 +10,28 @@
 
 Start by sending around $0.40 of ETH Gas to Redstone chain here: <a href="https://relay.link/bridge/redstone">www.relay.link</a>
 
-### DUST + EntryKit + Quarry + Bundler Architecture Overview
+### Core:
+A text MUD set in the on-chain DUST world, built for session-key, gas-abstracted play (ERC-4337 stack with Redstone bundler + Quarry paymaster). Gameplay actions are signed by a client-side session key and sent as UserOperations; the SCW validates, paymaster covers gas, and Dust contracts update world state. 
+
+### Current play mechanics (as implemented in recent releases / demos)
+  * Spawn, Look, Explore: baseline movement & world inspection. 
+  * 360° Mining queue: directional, queued mining loops (text UI). 
+  * Tool Crafting + Workbench: wood tools, workbench placement, and crafting flows. 
+  * Surveying for water: locate water to enable farming loops. 
+  * Farming loop (rudimentary, live): TILL dirt → CRAFT bucket → FILL bucket → WATER → BUILD with seeds in hand; includes wheat maturity and “glowing wheat”. 
+  * Energy / scarcity ethos: energy is conserved; flowers/blocks provably rare. 
+
+### How players connect & pay (account abstraction sketch)
+  * One-time wallet connect (EOA) → approve session key (stored client-side).
+  * All gameplay signed by the session key; Bundler simulates/forwards; SCW validates; Quarry Paymaster debits prepaid gas and whitelists game calls; EntryKit handles UX & signAndSendUserOperation() plumbing. Trust model scopes the
+    session key to game systems; SCW is non-custodial. 
+
+### LLM integration today (and near-term options)
+  * CO-OP AI mode: an LLM drives movement/looping behaviors; in-game command like customAI "You are a barbarian woman..." to set persona. Keys are held in sessionStorage in the client.
+  
+---
+
+### Specifics: DUST + EntryKit + Quarry + Bundler Architecture Overview
 ** 🔑 Wallets and Session Keys **
 
 * **EOA Wallet** (e.g. MetaMask)
@@ -87,17 +108,6 @@ Start by sending around $0.40 of ETH Gas to Redstone chain here: <a href="https:
 * All logic enforcing expiration/scope lives in the SCW's validation module
 * Gas limits are bounded by Quarry balance
 * SCW **does not hold assets** — it's a conduit for game execution and gas handling
-
----
-
-### ✅ Minimum Open Source Expectations
-
-To build trust, open source:
-
-* Session key validator contract (validation module)
-* Message formats or signing payloads
-* Gas deposit logic (Quarry integration)
-* Game system whitelisting logic
 
 ---
 

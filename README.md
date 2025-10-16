@@ -13,21 +13,21 @@ Start by sending around $0.40 of ETH Gas to Redstone chain here: <a href="https:
 ### Core:
 A text MUD set in the on-chain DUST world, built for session-key, gas-abstracted play (ERC-4337 stack with Redstone bundler + Quarry paymaster). Gameplay actions are signed by a client-side session key and sent as UserOperations; the SCW validates, paymaster covers gas, and Dust contracts update world state. 
 
-### Current play mechanics (as implemented in recent releases / demos)
-  * Spawn, Look, Explore: baseline movement & world inspection. 
-  * 360° Mining queue: directional, queued mining loops (text UI). 
+### Current play mechanics adapted from the onchain Dust World contracts 
+  * Spawn, Look, Explore: baseline movement & world inspection.  Batch movement for faster but dangerous travel!
+  * 360° Mining queue: directional, queued mining loops (text UI), and batched mining. 
   * Tool Crafting + Workbench: wood tools, workbench placement, and crafting flows. 
   * Surveying for water: locate water to enable farming loops. 
   * Farming loop (rudimentary, live): TILL dirt → CRAFT bucket → FILL bucket → WATER → BUILD with seeds in hand; includes wheat maturity and “glowing wheat”. 
-  * Energy / scarcity ethos: energy is conserved; flowers/blocks provably rare. 
+  * Conquer and reprogram existing depleted world Force Fields, spawntiles, and chests. Or deploy your own with simple commands! Grant/share admin access to force field territories. 
 
-### How players connect & pay (account abstraction sketch)
+### How players connect & pay gas fees (account abstraction sketch)
   * One-time wallet connect (EOA) → approve session key (stored client-side).
   * All gameplay signed by the session key; Bundler simulates/forwards; SCW validates; Quarry Paymaster debits prepaid gas and whitelists game calls; EntryKit handles UX & signAndSendUserOperation() plumbing. Trust model scopes the
     session key to game systems; SCW is non-custodial. 
 
-### LLM integration today (and near-term options)
-  * CO-OP AI mode: an LLM drives movement/looping behaviors; in-game command like customAI "You are a barbarian woman..." to set persona. Keys are held in sessionStorage in the client.
+### LLM integration today (currently supports OpenAI, rails in place for other LLM's)
+  * CO-OP AI mode: an LLM drives movement/looping behaviors; in-game command like customAI "You are a barbarian woman..." to set persona. Keys are held in sessionStorage in the client for safekeeping.
   
 ---
 

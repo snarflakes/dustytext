@@ -29,6 +29,17 @@ export class DoneCommand implements CommandHandler {
       byAction.set(op.action, arr);
     }
 
+    // Check for batch mining early and warn user about long wait time
+    if (byAction.has("mine")) {
+      const mineBlocks = byAction.get("mine")!;
+      const equippedTool = (globalThis as typeof globalThis & { equippedTool: { slot: number; type: string; name: string } | null }).equippedTool;
+      if (equippedTool && mineBlocks.length > 1) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `⚡ Initiating batch mining for ${mineBlocks.length} blocks (Roundtime 10s)...`
+        }));
+      }
+    }
+
     // registry
     let getCommand: ((name: string) => CommandHandler | undefined) | null = null;
     try {
@@ -149,6 +160,11 @@ export class DoneCommand implements CommandHandler {
     clearSelection(); // release owner & unpause
   }
 }
+
+
+
+
+
 
 
 

@@ -2,6 +2,8 @@ import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
 import { withQueuePause } from "../../commandQueue"; // path
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
+import { countStepsForMove } from "../../progress/stepcount";
+import { loadProgress, saveProgress, maybeLevelUp, ensureUnlocked } from "../../progress/model";
 
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
 
@@ -317,6 +319,31 @@ export class MoveCommand implements CommandHandler {
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `✅ Move ${moveDescription} completed${elevationMessage}. Tx: ${txHash}` 
         }));
+
+        // Track progress for movement
+        const playerId = context.address;
+        const moveCommand = `move ${directions.join(' ')}`;
+        const steps = countStepsForMove(moveCommand);
+        
+        if (steps > 0) {
+          const prog = loadProgress(playerId);
+          prog.tilesMoved += steps;
+
+          const leveled = maybeLevelUp(prog);
+          if (leveled) {
+            window.dispatchEvent(new CustomEvent("worker-log", { 
+              detail: `[SYSTEM] Level up! You reached Level ${prog.level}.` 
+            }));
+            
+            if (prog.level >= 2) {
+              ensureUnlocked(prog, "march");
+              window.dispatchEvent(new CustomEvent("worker-log", { 
+                detail: `[SYSTEM] Skill unlocked: MARCH (use: "skill march <dir>")` 
+              }));
+            }
+          }
+          saveProgress(playerId, prog);
+        }
 
         // Automatically look after successful move
         const { getCommand } = await import('./registry');

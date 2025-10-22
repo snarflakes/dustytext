@@ -1,6 +1,7 @@
 import { CommandHandler, CommandContext } from './types';
 import { createSkillContext } from '../../skills/skillSystem';
 import { tryDispatchSkill } from './dispatchSkill';
+import { getCommand } from './registry';
 
 // Import skills to ensure they're registered
 import '../../skills/march';
@@ -9,17 +10,26 @@ export class SkillCommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
     // Create skill context with current player's progress
     const skillCtx = createSkillContext(
-      [], // TODO: Pass recent commands from context
+      [], // TODO: Pass recent commands from context - we'll fix this next
       async (cmd: string) => {
-        // Execute command through the worker system
-        window.dispatchEvent(new CustomEvent("ai-command", {
-          detail: { command: cmd, source: "skill" }
-        }));
+        // Execute command through the same worker system that handles direct commands
+        const parts = cmd.split(' ');
+        const commandName = parts[0];
+        const cmdArgs = parts.slice(1);
+        
+        const handler = getCommand(commandName);
+        if (handler) {
+          await handler.execute(context, ...cmdArgs);
+        } else {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: `❌ Unknown command from skill: ${cmd}` 
+          }));
+        }
       },
       (text: string) => {
         window.dispatchEvent(new CustomEvent("worker-log", { detail: text }));
       },
-      context.address // Pass the same address used by move command
+      context.address
     );
 
     // Handle "skill" with no args as overview
@@ -45,6 +55,7 @@ export class SkillCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

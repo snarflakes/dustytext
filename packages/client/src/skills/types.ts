@@ -4,7 +4,7 @@ export type Dir =
   | "northeast"|"northwest"|"southeast"|"southwest";
 
 export type StepInfo = {
-  dy: -2 | -1 | 0 | 1 | null;   // how much to change Y to enter this column; null = not enterable
+  dy: -2 | -1 | 0 | 1 | 2 | null;   // how much to change Y to enter this column; null = not enterable
   air2: boolean;                 // two stacked AIR at the body space for that dy
   hasWater: boolean;
   hasLavaOrMagma: boolean;
@@ -56,5 +56,6 @@ export function registerSkill(
 ) {
   Skills[name.toLowerCase()] = { fn, ...opts };
 }
+
 
 

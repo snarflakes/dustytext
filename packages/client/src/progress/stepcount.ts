@@ -1,10 +1,10 @@
 // progress/stepcount.ts
-const DIR_TOKENS = new Set(["n","s","e","w","ne","nw","se","sw"]);
-const VERT_TOKENS = new Set(["u","d"]);
+const DIR_TOKENS = new Set(["n","s","e","w","ne","nw","se","sw","north","south","east","west","northeast","northwest","southeast","southwest"]);
+const VERT_TOKENS = new Set(["u","d","up","down"]);
 
 export function countStepsForMove(cmd: string): number {
   
-  const INCLUDE_VERTICAL = false;   // set false if you don't want u/d to count
+  const INCLUDE_VERTICAL = true;   // set true to match model.ts
   
   const lc = cmd.trim().toLowerCase();
   if (!lc.startsWith("move")) return 0;
@@ -13,7 +13,7 @@ export function countStepsForMove(cmd: string): number {
   const rest = lc.slice(4).trim();
   if (!rest.includes(" ")) return 1;
 
-  // Packed form: "move w w u w"
+  // Packed form: "move w w u w" or "move up north north north"
   const toks = rest.split(/\s+/);
   let count = 0;
   for (const t of toks) {

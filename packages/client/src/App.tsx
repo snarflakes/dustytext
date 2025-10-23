@@ -414,6 +414,8 @@ export function App() {
       runCommand('spawn');
     } else if (command === 'look' || command === 'l') {
       runCommand('look');
+    } else if (command === 'info') {
+      runCommand('info');
     } else if (command === 'health' || command === 'hp') {
       runCommand('health');
     } else if (command === 'explore' || command === 'exp') {

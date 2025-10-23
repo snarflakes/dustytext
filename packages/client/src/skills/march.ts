@@ -306,7 +306,7 @@ export const marchSkill: Skill = async (ctx, dirArg?: string) => {
 // Register the skill with metadata
 registerSkill("march", marchSkill, {
   requiredLevel: 2,
-  description: "Consume up to 5 safe steps after an explore, stopping before hazards/water.",
+  description: "Consume up to 5 safe steps after an explore, stopping before hazards/water. Used as such: skill march east",
   args: ["<dir>"],
   examples: ["skill march west"]
 });

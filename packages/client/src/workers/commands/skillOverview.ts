@@ -19,7 +19,7 @@ export function renderSkillOverview(ctx: SkillCtx): string {
     });
 
   return [
-    "[SKILLS]",
+    `[SKILLS] Level ${ctx.progress.level}`,
     ...rows,
     "Tip: use `skill <name> ...` to invoke; `skill info <name>` for details."
   ].join("\n");
@@ -39,4 +39,5 @@ export function renderSkillInfo(ctx: SkillCtx, name: string): string {
     `Examples:\n${examples}`
   ].join("\n");
 }
+
 

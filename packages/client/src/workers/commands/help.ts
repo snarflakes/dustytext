@@ -47,6 +47,11 @@ export class HelpCommand implements CommandHandler {
       '       [RegisterAI] configure AI assistant settings for AI mode,',
       '       [CustomAI] add custom instructions to future AI prompts, movement directions, personality,',
       '       [Council] address or council clear,delegate your dustforgeaccount to another address, or clear delegation,',
+      '  Level and Skills:',
+      '       [Info] check your level and progress, including steps taken and skills learned, move 5 times to get to level 2',
+      '       [Skills] check your level and unlocked skills,',
+      '       [Skill <name> ...] invoke a skill, e.g., skill march west,',
+      '       [Skill Info <name>] check a skill\'s details, e.g., skill info march,',
       
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',
       '  System: help/h, clear, balance/bal, players/who,',

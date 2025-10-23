@@ -414,15 +414,18 @@ export function App() {
       runCommand('spawn');
     } else if (command === 'look' || command === 'l') {
       runCommand('look');
+    } else if (command === 'info') {
+      runCommand('info');
     } else if (command === 'health' || command === 'hp') {
       runCommand('health');
     } else if (command === 'explore' || command === 'exp') {
       runCommand('explore');
-
     } else if (command.startsWith('explore ') || command.startsWith('exp ')) {
       // forward EVERYTHING after the verb so explore can parse order-agnostic
       const tail = command.replace(/^(explore|exp)\s+/i, "");
       runCommand(`explore ${tail}`);
+    } else if (command.startsWith('skill') || command === 'skills') {
+      runCommand(raw); // Use raw input to preserve arguments and case
     
     } else if (command.startsWith('registerai')) {
       const args = command.split(' ').slice(1);
@@ -454,7 +457,8 @@ export function App() {
     } else if (command === 'help' || command === 'h') {
       runCommand('help');
     } else if (command === 'mine' || command.startsWith('mine ')) {
-      runCommand(command.trim());
+      runCommand(command.trim()); 
+        
     } else if (command === 'inventory' || command === 'inv' || command === 'i') {
       runCommand('inventory');
     } else if (command.startsWith('craft ')) {

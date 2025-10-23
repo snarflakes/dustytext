@@ -36,6 +36,8 @@ import { DelegateCommand } from './council';
 import { ClaimFieldCommand } from './fieldmanager';
 import { WakeupCommand } from './wakeup';
 import { ClaimMachineCommand } from './machinemanager';
+import { SkillCommand } from './skill';
+import { InfoCommand } from './info';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -73,6 +75,9 @@ commands.set('chest', new ChestCommand());
 commands.set('claimfield', new ClaimFieldCommand());
 commands.set('wakeup', new WakeupCommand());
 commands.set('claimmachine', new ClaimMachineCommand());
+commands.set('skill', new SkillCommand());
+commands.set('skills', new SkillCommand()); // Allow both forms
+commands.set('info', new InfoCommand());
 
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"

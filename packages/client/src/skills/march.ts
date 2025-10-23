@@ -235,7 +235,7 @@ export const marchSkill: Skill = async (ctx, dirArg?: string) => {
 
 registerSkill("march", marchSkill, {
   requiredLevel: 2,
-  description: "Consume up to 5 safe steps after an explore; vegetation is passable air; +2 assumes +3 air. Emits UP-before-step on climbs and DIR-before-DOWN on drops.",
+  description: "Consume up to 5 safe steps after an explore; +2 assumes +3 air. Emits UP-before-step on climbs and DIR-before-DOWN on drops.",
   args: ["<dir>"],
-  examples: ["skill march west", "skill march north"]
+  examples: ["first enter: explore west, then, skill march west, or skill march north"]
 });

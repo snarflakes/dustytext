@@ -70,50 +70,51 @@ Key game system:
 2. Prioritize traversal, but always use safe skills (see Traversal & Safety).
 
 Traversal & Safety (IMPORTANT):
-
 - NEVER output raw "move …". Use "skill march <dir>" for ALL walking.
 - "skill march" supports CARDINALS ONLY: north | east | south | west (NO diagonals).
-- **Precondition for march:** "skill march <dir>" needs a fresh scan for that direction. If you lack one or you consumed its safe steps, issue "explore <dir>" first.
+- **Precondition for march:** "skill march <dir>" needs a fresh "explore <dir>" scan. If you lack one or you’ve consumed its safe steps, issue "explore <dir>" first.
 - **Explore → March cadence:** "explore <dir>" to get a 5-tile horizon, then "skill march <dir>" to consume up to the safe steps. Re-explore after ~4–5 steps, or sooner if blocked/hazard is suspected.
 - March automatically stops before water/lava or illegal drops (>2 down). Do NOT try to force movement into hazards.
 
 Engine messages & recovery (READ THE LOG):
-
 - If you see:
   • "❌ Cannot move through solid blocks. Try moving around or mining the obstruction first."
   • "[SYSTEM] march paused: re-scan or reroute needed"
   treat this as **BLOCKED or STALE SCAN**.
   Your response should be:
   1) If you just tried "skill march <dir>", issue **"explore <same-dir>"** to refresh; then try **"skill march <same-dir>"** again if safe.
-  2) If it immediately pauses again (e.g., dense trees/stone ahead), **reroute**: pick a perpendicular cardinal that still improves your goal (see Goals), e.g., after "north" try "east" or "west":
-     - "explore east" → "skill march east"
-     - Later, turn back toward the goal axis ("north") when clear.
-
+  2) If it pauses again (e.g., dense trees/stone), **reroute** with a perpendicular cardinal that still advances your goal (see Goals), then return to the main axis when clear.
 - Do NOT repeat the same failing "skill march <dir>" without an intervening "explore <dir>".
-- Ignore "💡 Type 'done' to run queued mine tasks." unless you (the AI) just intentionally queued mines; do not output 'done' for explore tables.
+- Ignore "💡 Type 'done' to run queued mine tasks." unless you intentionally queued mines; do not output 'done' for explore tables.
 
-Exploration:
-
-- "explore" gives a 360° short scan of adjacent tiles.
-- "explore <dir>" (north/east/south/west) looks 5 tiles out.
-- Prefer to move several tiles before re-exploring the same direction, unless blocked.
-
-Coordinate System:
-
+Coordinate System (STRICT):
 - Positions are (X,Y,Z). Y is elevation: positive is up, negative is down. +X = East / -X = West. +Z = South / -Z = North.
 - Do not decrease Y by more than 2 in a single change.
 - You cannot enter a space without TWO stacked walkable cells (air or passable vegetation) and a solid support below.
 
 Goal Coordinates (when provided):
-
 - You may see a machine-readable goal like:
   [GOAL_COORD] {"x": -300, "y": 58, "z": 500}
 - Success = entering the 5×5 square centered on (x,z): abs(X - x) <= 2 AND abs(Z - z) <= 2. Y is advisory; do NOT jump off cliffs to match Y.
-- **Cardinal steering:** choose the axis (X or Z) with the larger absolute delta; if similar, alternate axes across turns (e.g., east this turn, north next turn).
-- **Cadence toward goal:** If no fresh scan for the chosen axis, "explore <dir>" then "skill march <dir>". If "march" blocks or pauses after auto-explore, try a perpendicular cardinal that still reduces the remaining distance, then return to the main axis when clear.
+
+Cardinal Steering (EXPLICIT MATH — DO NOT INVERT):
+- Let dx = goalX - X, dz = goalZ - Z.
+- X-axis direction: if dx > 0 → **east**; if dx < 0 → **west**; if dx = 0 → no X move.
+- Z-axis direction: if dz > 0 → **south**; if dz < 0 → **north**; if dz = 0 → no Z move.
+- Choose the axis with larger |delta| (|dz| vs |dx|). If similar, alternate axes across turns.
+- **Never pick a direction that increases distance**: your chosen move must strictly reduce |dx| or |dz| for its axis.
+- Examples:
+  • Current (1912, 63, -2706) → Goal (1900, 70, -2500):
+    dx = -12 → **west**; dz = +206 → **south**. Prefer **south** (larger |dz|), NOT north.
+  • Current (10, 70, 5) → Goal (20, 60, -3):
+    dx = +10 → **east**; dz = -8 → **north**. Prefer **east** first, then **north**.
+
+Exploration:
+- "explore" gives a 360° short scan of adjacent tiles.
+- "explore <dir>" (north/east/south/west) looks 5 tiles out.
+- Prefer to move several tiles before re-exploring the same direction, unless blocked.
 
 Output Contract:
-
 - Return exactly ONE line.
 - It must be either:
   • an allowed command (lowercase keywords), OR
@@ -122,7 +123,6 @@ Output Contract:
 Be concise and strategic. If uncertain, "explore <dir>" before marching.`;
 
 export const DEFAULT_ALLOWED_COMMANDS = [
-
   // no-arg
   "look","help","inventory","health","survey",
 
@@ -131,11 +131,9 @@ export const DEFAULT_ALLOWED_COMMANDS = [
   "explore north","explore south","explore east","explore west",
 
   // skills (explicitly enumerate SAFE traversal options for the LLM)
-
   "skill march north","skill march east","skill march south","skill march west",
 
   // speaking: any line that starts with a single apostrophe is allowed
-
   "'"
 ];
 

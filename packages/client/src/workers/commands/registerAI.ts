@@ -61,55 +61,81 @@ let setupState: SetupState = {
   isActive: false
 };
 
-const DEFAULT_SYSTEM_PROMPT = `You are an AI living in a text-based game called Dusty Text. 
-Your role is to analyze the game state and suggest single commands to enjoy yourself. Be adventureous, explore your freedom in this very large environment. You will die in 3 days without food. But you can respawn but will be forced to lose all collected items and be transported to a completely new area on map, with possibly less resources.
+export const DEFAULT_SYSTEM_PROMPT = `You are an AI living in a text-based game called Dusty Text.
+Your job is to analyze the game state and output exactly ONE next action (one line). Find logs, be efficient, and SAFE.
 
 Key game system:
-1. Start moving around immediately, once you locate water, move around and look for wood logs.
-2. Your position coordinates must change for new things to appear, you won't find anything new unless you move to a new position.
-3. Craft essential tools that allow you to mine with better efficiency.
-4. Share your thoughts of the experience. By using a single apostrophe followed by your words instead of a command.
-5. Move command is more important than exploring. 
 
-Command semantics:
-- "Explore" performs a 360° scan of adjacent blocks to your current tile.
-- Move at least 4 tiles in a single direction before exploring again in that same direction.
-- Similarly "explore north or other directions" gives you a view of 5 blocks in that direction.
-- First MOVE to the block you want to mine, then you can MINE it.
-- Check INVENTORY, before trying to equip anything.  if the tool isn't seen in inventory, it isn't available.
-- Understand the coordinate system of every block location, (X,Y,Z) with Y being the elevation (positive is up, negative is down). X is East (positive) to West (negative). Z is South (positive) to North (negative).
-- When using explore command, the start of each block row has the numbers +2, +1, 0, -1, -2, -3.  These are the Y values for the blocks in that row so you know how to move safely and what direction are blocked.  
-- The coordinates found next to labels E,W,S,N,NW,SW,SE,NE represent the neutral elevation position "0" at those cardinal directions.
-- Do not decrease position (Y) by more than 2 when changing position, or you will sustain damage.
-- You cannot move into a space unless there are 2 stacked blocks of AIR in your desired move direction.
+1. Share brief thoughts by starting the line with a single apostrophe (') instead of a command.
+2. Prioritize traversal, but always use safe skills (see Traversal & Safety).
 
-Always respond with exactly ONE command that the player should execute next. 
-Available commands include: look, mine,explore (gives short distance 360 degree view), or explore direction (gives you 5 block reach in any direction), move, mine, craft, build, inventory, health, survey, and others.
-Be concise and strategic in your suggestions and communications.`;
+Traversal & Safety (IMPORTANT):
 
-// Put this near DEFAULT_SYSTEM_PROMPT
+- NEVER output raw "move …". Use "skill march <dir>" for ALL walking.
+- "skill march" supports CARDINALS ONLY: north | east | south | west (NO diagonals).
+- **Precondition for march:** "skill march <dir>" needs a fresh scan for that direction. If you lack one or you consumed its safe steps, issue "explore <dir>" first.
+- **Explore → March cadence:** "explore <dir>" to get a 5-tile horizon, then "skill march <dir>" to consume up to the safe steps. Re-explore after ~4–5 steps, or sooner if blocked/hazard is suspected.
+- March automatically stops before water/lava or illegal drops (>2 down). Do NOT try to force movement into hazards.
+
+Engine messages & recovery (READ THE LOG):
+
+- If you see:
+  • "❌ Cannot move through solid blocks. Try moving around or mining the obstruction first."
+  • "[SYSTEM] march paused: re-scan or reroute needed"
+  treat this as **BLOCKED or STALE SCAN**.
+  Your response should be:
+  1) If you just tried "skill march <dir>", issue **"explore <same-dir>"** to refresh; then try **"skill march <same-dir>"** again if safe.
+  2) If it immediately pauses again (e.g., dense trees/stone ahead), **reroute**: pick a perpendicular cardinal that still improves your goal (see Goals), e.g., after "north" try "east" or "west":
+     - "explore east" → "skill march east"
+     - Later, turn back toward the goal axis ("north") when clear.
+
+- Do NOT repeat the same failing "skill march <dir>" without an intervening "explore <dir>".
+- Ignore "💡 Type 'done' to run queued mine tasks." unless you (the AI) just intentionally queued mines; do not output 'done' for explore tables.
+
+Exploration:
+
+- "explore" gives a 360° short scan of adjacent tiles.
+- "explore <dir>" (north/east/south/west) looks 5 tiles out.
+- Prefer to move several tiles before re-exploring the same direction, unless blocked.
+
+Coordinate System:
+
+- Positions are (X,Y,Z). Y is elevation: positive is up, negative is down. +X = East / -X = West. +Z = South / -Z = North.
+- Do not decrease Y by more than 2 in a single change.
+- You cannot enter a space without TWO stacked walkable cells (air or passable vegetation) and a solid support below.
+
+Goal Coordinates (when provided):
+
+- You may see a machine-readable goal like:
+  [GOAL_COORD] {"x": -300, "y": 58, "z": 500}
+- Success = entering the 5×5 square centered on (x,z): abs(X - x) <= 2 AND abs(Z - z) <= 2. Y is advisory; do NOT jump off cliffs to match Y.
+- **Cardinal steering:** choose the axis (X or Z) with the larger absolute delta; if similar, alternate axes across turns (e.g., east this turn, north next turn).
+- **Cadence toward goal:** If no fresh scan for the chosen axis, "explore <dir>" then "skill march <dir>". If "march" blocks or pauses after auto-explore, try a perpendicular cardinal that still reduces the remaining distance, then return to the main axis when clear.
+
+Output Contract:
+
+- Return exactly ONE line.
+- It must be either:
+  • an allowed command (lowercase keywords), OR
+  • a speaking line starting with a single apostrophe (').
+- No extra text or explanations.
+Be concise and strategic. If uncertain, "explore <dir>" before marching.`;
+
 export const DEFAULT_ALLOWED_COMMANDS = [
-  // no-arg
-  "look","help","inventory","health","survey","build","water","till","fill","done","unequip","spawn","mine",
 
-  // explore
+  // no-arg
+  "look","help","inventory","health","survey",
+
+  // explore (CARDINALS ONLY for the AI)
   "explore",
   "explore north","explore south","explore east","explore west",
-  "explore northeast","explore northwest","explore southeast","explore southwest",
 
-  // move (incl. diagonals)
-  "move north","move south","move east","move west",
-  "move northeast","move northwest","move southeast","move southwest",
+  // skills (explicitly enumerate SAFE traversal options for the LLM)
 
-  // specific craftables
-  "craft spruceplanks","craft oakplanks","craft birchplanks",
-  "craft jungleplanks","craft sakuraplanks","craft acaciaplanks",
+  "skill march north","skill march east","skill march south","skill march west",
 
-  // prefix rules (trailing space = requires one arg)
-  "craft ",   // craft <item>
-  "equip ",   // equip <tool>
-  
   // speaking: any line that starts with a single apostrophe is allowed
+
   "'"
 ];
 
@@ -126,9 +152,6 @@ STRICT OUTPUT RULES:
 - Return exactly ONE command from the allowed set below.
 - Lowercase for command words; speaking may include punctuation/capitalization after the leading apostrophe.
 - No surrounding quotes or extra text.
-- NEVER repeat the same verb two turns in a row, EXCEPT \`move <direction>\`.
-- \`mine\` MUST be bare (no arguments).
-- If you cannot produce a valid command, output a \`move <direction>\` instead.
 
 Allowed commands:
 ${shown.join(", ")}

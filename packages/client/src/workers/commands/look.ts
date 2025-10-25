@@ -302,7 +302,7 @@ export class LookCommand implements CommandHandler {
       }
 
       const coordLink = createCoordLinkHTML(x, y, z, 4);
-      const lookOutput = `${terrainLabel}${biomeLabel} You are at ${coordLink}, facing ${orientation.label}. `;
+      const lookOutput = `${terrainLabel}${biomeLabel} You are at ${coordLink}.`;
       const finalMessage = biomeHeaderText ? `${biomeHeaderText}${lookOutput}` : lookOutput;
       
       console.log('LookCommand: Final message:', finalMessage);

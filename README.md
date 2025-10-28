@@ -27,8 +27,11 @@ A text MUD set in the on-chain DUST world, built for session-key, gas-abstracted
     session key to game systems; SCW is non-custodial. 
 
 ### LLM integration today (currently supports OpenAI, rails in place for other LLM's)
-  * CO-OP AI mode: an LLM drives movement/looping behaviors; in-game command like customAI "You are a barbarian woman..." to set persona. Keys are held in sessionStorage in the client for safekeeping.
-  
+  * CO-OP AI mode: an LLM drives movement/looping behaviors; in-game command like customAI "You are a barbarian woman..." to set persona.
+  * Command: RegisterAI to enter your openAI api to start the fun!
+  * API Keys are held only in sessionStorage and temporarily for safekeeping.
+  * Set Persona "#1 DustyText guide"
+  * Set "customAI Head north" to have LLM guide you safely on a fast fixed course north!  
 ---
 
 ### Specifics: DUST + EntryKit + Quarry + Bundler Architecture Overview

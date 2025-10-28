@@ -324,7 +324,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
 
         // Hide AI/system chatter from the model
         const cleanLog = (snap.recentLog ?? []).filter(
-          (line) => !/^(You start to ai auto|🤖|🛑|🔌|⚠️|✅|💾|Tx: 0x|You start to skill march|Type 'done' to run queued|Click blocks to queue)/.test(line)
+          (line) => !/^(You start to ai auto|🤖|🛑|🔌|⚠️|✅|💾)|Tx: 0x|You start to explore|You start to skill march|Type 'done' to run queued|Click blocks to queue/.test(line)
         );
 
         // Recent commands (lowercased)

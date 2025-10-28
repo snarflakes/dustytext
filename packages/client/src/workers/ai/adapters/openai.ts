@@ -1,6 +1,7 @@
 // workers/ai/adapters/openai.ts
 import type { AIClient } from "../client";
 import type { AIConfig } from "../../commands/registerAI";
+import { getCustomPromptAddition } from "../../commands/customAI";
 
 // ---------- helpers ----------
 const mask = (k: string) => (k || "").replace(/^(.{6}).+(.{4})$/, "$1…$2");
@@ -82,6 +83,88 @@ function extractNotes(lines: string[]) {
     else if (l.startsWith("[AI_SAY]")) ai.push(l.replace(/^\[AI_SAY\]\s*/, ""));
   }
   return { player, ai };
+}
+
+// ---- Persona presets (kept short to control tokens) ----
+type PersonaKey = "tour" | "comedy" | "nav" | "logs";
+
+const PERSONA_PRESETS: Record<PersonaKey, { label: string; system: string; allowed?: string[] }> = {
+  tour: {
+    label: "Dusty Tour Guide",
+    system:
+      [
+        "## Persona: Dusty Tour Guide",
+        "- Default to brief speech (apostrophe line) ONLY when the last visible human line ends with a question mark (?).",
+        "- Give one practical hint at a time about what the player sees and how to use commands like `explore <dir>` and `inventory`.",
+        "- Do not spam speech; otherwise behave as base rules.",
+      ].join("\n"),
+    allowed: ["look", "explore ", "inventory", "explore north","explore south","explore east","explore west", "skill march north","skill march east","skill march south","skill march west","'"],
+  },
+  comedy: {
+    label: "Dusty Comedian",
+    system:
+      [
+        "## Persona: Dusty Comedian",
+        "- Prefer a brief witty one-liner (apostrophe line) ONLY when the last visible human line ends with a question mark (?).",
+        "- Keep jokes short and clean; never block gameplay.",
+        "- When not asked a question, follow base traversal/safety rules normally.",
+      ].join("\n"),
+    allowed: ["look", "explore ", "skill march ", "inventory", "'"],
+  },
+  nav: {
+    label: "Dusty Navigation Assist",
+    system:
+      [
+        "## Persona: Dusty Navigation Assist",
+        "- Prioritize `explore <dir>` and `skill march <dir>` toward the current goal; avoid speaking unless asked (last human line ends with ?).",
+        "- Do not use crafting/mining unless right next to a clear resource need; stay focused on movement.",
+      ].join("\n"),
+    allowed: ["explore ", "skill march ", "look"],
+  },
+  logs: {
+    label: "Log Hunter",
+    system:
+      [
+        "## Persona: Log Hunter",
+        "Goal: find tree logs quickly and safely using only explore + march.",
+        "Log names (case-insensitive): OakLog, SpruceLog, JungleLog, AcaciaLog, BirchLog, SakuraLog.",
+        "Passable-as-air: Air, SwitchGrass, Fescue, Vines, HempBush, CottonBush, BambooBush, Flower, WheatSeed.",
+        "Scoring from `explore <dir>` (Blocks 1–3): +5 log at +0/+1; +3 log at +2; -5 water/lava in Blocks 1–2; +1 per passable (+0/+1). Ties: prefer a direction not explored last turn.",
+        "Loop: if no fresh scan: `explore <dir>`; if safe per score: `skill march <dir>`; never repeat the same `explore <dir>` twice without a move; when adjacent to a log, step next to it then `mine` (bare).",
+      ].join("\n"),
+    allowed: ["explore ", "skill march ", "mine"],
+  },
+};
+
+function selectPersona(explicit?: PersonaKey): PersonaKey {
+  // 1) If caller provided, use it
+  if (explicit && PERSONA_PRESETS[explicit]) {
+    return explicit;
+  }
+
+  // 2) Prompt every time
+  const msg =
+    "Choose your Dusty AI NPC:\n" +
+    "  1) Dusty Tour Guide\n" +
+    "  2) Dusty Comedian\n" +
+    "  3) Dusty Navigation Assist\n" +
+    "  4) Log Hunter\n" +
+    "\nEnter 1-4:";
+  let key: PersonaKey = "nav";
+  try {
+    const ans = (window.prompt?.(msg) || "").trim();
+    const n = Number(ans);
+    key =
+      n === 1 ? "tour" :
+      n === 2 ? "comedy" :
+      n === 3 ? "nav" :
+      n === 4 ? "logs" : "nav";
+  } catch {
+    // If prompt unavailable (non-browser), fall back to nav
+    key = "nav";
+  }
+  window.dispatchEvent(new CustomEvent("worker-log", { detail: `🤖 NPC set: ${PERSONA_PRESETS[key].label}` }));
+  return key;
 }
 
 
@@ -213,7 +296,9 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
     return text;
   }
 
-  const compiledAllowed = compileAllowed(cfg.allowedCommands);
+  // Select persona once when the AI client is created
+  const personaKey = selectPersona((cfg as any).persona as PersonaKey | undefined);
+  const personaBlock = PERSONA_PRESETS[personaKey]?.system ?? "";
 
   return {
     async testConnection() {
@@ -239,18 +324,12 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
 
         // Hide AI/system chatter from the model
         const cleanLog = (snap.recentLog ?? []).filter(
-          (line) => !/^(You start to ai auto|🤖|🛑|🔌|⚠️|✅|💾)/.test(line)
+          (line) => !/^(You start to ai auto|🤖|🛑|🔌|⚠️|✅|💾|Tx: 0x|You start to skill march|Type 'done' to run queued|Click blocks to queue)/.test(line)
         );
 
         // Recent commands (lowercased)
         const recentCmds = (snap.recentCommands ?? []).map((s) => String(s).toLowerCase());
         const lastCmd = recentCmds[recentCmds.length - 1] ?? "";
-
-        // Pick the next direction not used in the last couple of explores
-        const dirCycle = ["north","east","south","west","northeast","northwest","southeast","southwest"];
-        const lastExplores = recentCmds.filter((c) => c.startsWith("explore ")).slice(-2);
-        const recentlyTried = lastExplores.map((c) => c.replace(/^explore\s+/, ""));
-        const nextDir = dirCycle.find((d) => !recentlyTried.includes(d)) ?? "north";
 
         const { player: playerNotes } = extractNotes(cleanLog);
 
@@ -259,21 +338,15 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
           {
             address: snap.address,
             recentCommands: recentCmds.slice(-8),
-            recentLog: cleanLog.slice(-30),
+            recentLog: cleanLog.slice(-20),
           },
           null,
           2
         );
-        const notesSection = playerNotes.length
-          ? `\nPlayer notes (treat as preferences, highest priority):\n- ${playerNotes.slice(-3).join("\n- ")}\n`
-          : "";
+        const notesSection = "{PLAYER_NOTES}";
 
         // Gentle preference hints (no hard bans on repeats)
-        const preferences =
-          `Preferences:\n` +
-          `- Previous command: ${lastCmd || "none"}.\n` +
-          `- 'mine' MUST be bare (no arguments like "down" or "grass").\n`+
-          `- NEVER repeat the same verb two turns in a row, EXCEPT move <direction>.\n`;
+        const preferences = "{PREFERENCES}";
 
         // Output contract (allows speaking via leading apostrophe)
         const outputContract =
@@ -284,9 +357,16 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
           `  • a speaking line that begins with a single apostrophe (').\n` +
           `- No extra text or explanations.\n`;
 
+        // Build system prompt with persona and custom additions (checked fresh each time)
+        const customAddition = getCustomPromptAddition();
+        const systemPromptWithPersona = `${cfg.systemPrompt}\n\n${personaBlock}`;
+        const finalSystemPrompt = customAddition
+          ? `${systemPromptWithPersona}\n\nADDITIONAL INSTRUCTIONS:\n${customAddition}`
+          : systemPromptWithPersona;
+
         // Type the prompt so TS knows role is the literal union
         const prompt: ReadonlyArray<{ role: "system" | "user"; content: string }> = [
-          { role: "system", content: cfg.systemPrompt },
+          { role: "system", content: finalSystemPrompt },
           {
             role: "user",
             content:
@@ -295,7 +375,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
               `${preferences}\n` +
               `${outputContract}\n` +
               // Softer fallback: you *want* occasional speech
-              `If uncertain, speak briefly about your intent.\n` 
+              `If uncertain, speak briefly about your intent.\n`
               // Give it a nudge to explore variety
               //`If the last visible result was a 'look', consider "explore ${nextDir}".`,
           },
@@ -324,7 +404,10 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
 
         const raw = await call(body);
 
-        
+        // Compile allowed commands for this persona
+        const personaAllowed = PERSONA_PRESETS[personaKey]?.allowed ?? cfg.allowedCommands;
+        const compiledAllowed = compileAllowed(personaAllowed);
+
         let normalized = normalizeForExec(raw);
 
         // If it's a speaking line but the inside is a valid command, treat it as a command

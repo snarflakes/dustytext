@@ -42,8 +42,10 @@ export class AICommand implements CommandHandler {
         return;
       }
 
-      // Keep runtime in sync with latest config
-      setAIRuntimeConfig(cfg);
+      // Keep runtime in sync with latest config (only if not already set)
+      if (!getAIClient()) {
+        setAIRuntimeConfig(cfg);
+      }
 
       // Provide the AI some recent context
       const snapshot = {

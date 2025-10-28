@@ -104,7 +104,7 @@ function createClickableBlock(block: SelectableBlock): string {
     block.name.toLowerCase().includes(plant.toLowerCase())
   );
   const isWater = block.name.toLowerCase().includes("water");
-  const isMachine = ["workbench", "powerstone", "forcefield machine", "furnace", "spawntile", "bed", "chest", "ForceField", "torch"].some(machine => 
+  const isMachine = ["workbench", "powerstone", "forcefield machine", "furnace", "spawntile", "bed", "chest", "ForceField", "torch", "textsign", "a glowing orb", "emanating mind threads"].some(machine => 
     block.name.toLowerCase().includes(machine.toLowerCase())
   );
 
@@ -287,7 +287,33 @@ async function displayName(t: number | undefined, pos?: Vec3): Promise<string> {
     }
   }
   
+  // Handle TextSign renaming
+  if (base === "TextSign" && pos) {
+    const [x, y, z] = pos;
+    // Y is vertical in this codebase, not Z
+    const aboveType = await getBlockTypeAt(x, y + 1, z);
+    const belowType = await getBlockTypeAt(x, y - 1, z);
+    
+    // If the block below is the same type, current is the TOP piece
+    if (belowType === t) {
+      name = "a glowing orb";
+    }
+    // If the block above is the same type, current is the BOTTOM piece
+    else if (aboveType === t) {
+      name = "emanating mind threads";
+    }
+  }
+  
   return name;
+}
+
+async function getBlockTypeAt(x: number, y: number, z: number): Promise<number | undefined> {
+  try {
+    const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, [[x, y, z]]);
+    return typeMap.get(encodeBlock([x, y, z]));
+  } catch {
+    return undefined;
+  }
 }
 
 // ---- Put this near the top of explore.ts (above the class) ----

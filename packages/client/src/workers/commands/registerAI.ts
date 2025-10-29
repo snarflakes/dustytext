@@ -94,11 +94,16 @@ March skill (use this instead of raw “move”)
 - Use: skill march <north|east|south|west>.
 - March consumes up to 5 safe tiles ahead that were confirmed by the last "explore <dir>".
 - If there is NO recent scan for <dir> in the last few visible lines, first do "explore <dir>", then "skill march <dir>".
-- **Never issue "explore <dir>" twice in a row without a movement event in between.**
   Consider a “movement event” any visible line like "🏃 You ran …" or "MOVE_OK: …".
   If your last action was "explore <dir>" and no movement event has appeared since, your next action must be "skill march <dir>" (not another explore).
 - Re-scan at least every 5 steps in the same direction, or sooner if blocked.
-- If you see an error like "march paused" or "Cannot move through solid blocks", re-scan the same direction once before considering other options.
+
+Hard anti-spam rules (must follow)
+- Never issue "explore <dir>" twice in a row without a movement event in between.
+- After any error like "march paused" or "Cannot move through solid blocks":
+  • If your last command was "skill march <dir>": your next command MUST be "explore <dir>" (exactly once).
+  • If your last command was "explore <dir>": your next command MUST be "skill march <dir>" (exactly once).
+  • After performing that one explore→march or march→explore pair, if you still see an error and there has been NO movement event, do NOT output another "explore <dir>" again. Choose a different perpendicular cardinal exploration or wait for human input.
 
 Lightweight human intent
 - If the LAST visible human line mentions a cardinal direction (e.g., "go east", "head west", "east?"), treat that as the preferred direction for your next scan/march cycle.
@@ -109,7 +114,6 @@ Output contract
   • a short speech line beginning with a single apostrophe (').
 - Be concise and strategic.
 `;
-
 
 export const DEFAULT_ALLOWED_COMMANDS = [
   // utility

@@ -11,6 +11,7 @@ const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = "0x253eb85B3C953bFE3827CC14a151262482E7189C";
 const POSITION_TABLE = "EntityPosition";
 const ORIENTATION_TABLE = "EntityOrientation";
+const TEXTSIGN_CONTENT_TABLE = "dfprograms_1__TextSignContent";
 
 // Cache for consistent descriptors per location
 const descriptorCache = new Map<string, { terrain?: string; biome?: string; sensory?: string; hasSensory?: boolean }>();
@@ -146,6 +147,51 @@ function displayName(t: number | undefined): string {
   return d ? `${d.charAt(0).toUpperCase()}${d.slice(1)} ${base}` : base;
 }
 
+async function getTextSignContent(entityId: `0x${string}`): Promise<string | null> {
+  try {
+    const query = `SELECT "content" FROM "${TEXTSIGN_CONTENT_TABLE}" WHERE "entityId" = '${entityId}'`;
+    
+    console.log(`[look] Querying for TextSign content: ${query}`);
+    
+    const response = await fetch(INDEXER_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify([{ address: WORLD_ADDRESS, query }]),
+    });
+
+    console.log(`[look] TextSign HTTP response status: ${response.status}`);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.log(`[look] TextSign HTTP error: ${response.status} - ${errorText}`);
+      return null;
+    }
+
+    const result = await response.json();
+    console.log(`[look] TextSign response JSON:`, result);
+    
+    const rows = result?.result?.[0];
+    if (!Array.isArray(rows) || rows.length < 2) {
+      console.log(`[look] No TextSign data found in response`);
+      return null;
+    }
+
+    const [cols, vals] = rows;
+    const contentIndex = cols.indexOf("content");
+    if (contentIndex === -1 || !vals[contentIndex]) {
+      console.log(`[look] No content found or content is empty`);
+      return null;
+    }
+
+    const content = vals[contentIndex] as string;
+    console.log(`[look] Found TextSign content: ${content}`);
+    return content;
+  } catch (error) {
+    console.log('[look] TextSign content fetch failed:', error);
+    return null;
+  }
+}
+
 export class LookCommand implements CommandHandler {
   async execute(context: CommandContext): Promise<void> {
     try {
@@ -221,6 +267,20 @@ export class LookCommand implements CommandHandler {
         console.log('LookCommand: Orientation fetch failed:', oriError);
       }
 
+      // Check for TextSign content at y-2 position first
+      let textSignContent = "";
+      let isOnTextSign = false;
+      try {
+        const textSignEntityId = encodeBlock([x, y - 2, z]);
+        const signContent = await getTextSignContent(textSignEntityId);
+        if (signContent) {
+          textSignContent = signContent;
+          isOnTextSign = true;
+        }
+      } catch (textSignError) {
+        console.log('LookCommand: TextSign fetch failed:', textSignError);
+      }
+
       // Get terrain and biome using new accurate methods
       let terrainLabel = "Unknown terrain.";
       let biomeLabel = "";
@@ -230,10 +290,12 @@ export class LookCommand implements CommandHandler {
       
       try {
         // Use new accurate block detection for ground and surface
-        const positions: Vec3[] = [[x, y - 1, z], [x, y, z]];
+        // If on TextSign, check y-3 for ground, otherwise use y-1
+        const groundY = isOnTextSign ? y - 3 : y - 1;
+        const positions: Vec3[] = [[x, groundY, z], [x, y, z]];
         const typeMap = await resolveObjectTypesFresh(publicClient as PublicClient, WORLD_ADDRESS as `0x${string}`, positions);
         
-        const groundType = typeMap.get(encodeBlock([x, y - 1, z]));
+        const groundType = typeMap.get(encodeBlock([x, groundY, z]));
         const surfaceType = typeMap.get(encodeBlock([x, y, z]));
         
         if (typeof groundType === "number" && objectNamesById[groundType]) {
@@ -247,8 +309,8 @@ export class LookCommand implements CommandHandler {
           const terrainText = cachedDescriptors.terrain ? `${cachedDescriptors.terrain} ${blockName}` : blockName;
           let surfaceText = "";
           
-          // Check for surface objects like flowers/grass
-          if (typeof surfaceType === "number" && objectNamesById[surfaceType] && surfaceType !== 1) { // 1 is Air
+          // Check for surface objects like flowers/grass (only when not on TextSign)
+          if (!isOnTextSign && typeof surfaceType === "number" && objectNamesById[surfaceType] && surfaceType !== 1) { // 1 is Air
             const surfaceName = displayName(surfaceType);
             surfaceText = ` There is ${surfaceName.toLowerCase()} here.`;
           }
@@ -302,7 +364,9 @@ export class LookCommand implements CommandHandler {
       }
 
       const coordLink = createCoordLinkHTML(x, y, z, 4);
-      const lookOutput = `${terrainLabel}${biomeLabel} You are at ${coordLink}.`;
+      const lookOutput = textSignContent 
+        ? `${textSignContent} ${terrainLabel}${biomeLabel} You are at ${coordLink}.`
+        : `${terrainLabel}${biomeLabel} You are at ${coordLink}.`;
       const finalMessage = biomeHeaderText ? `${biomeHeaderText}${lookOutput}` : lookOutput;
       
       console.log('LookCommand: Final message:', finalMessage);

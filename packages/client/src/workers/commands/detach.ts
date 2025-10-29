@@ -236,6 +236,15 @@ export class DetachProgramCommand implements CommandHandler {
         return;
       }
       
+      // Check for "No program attached" error
+      if (msg.includes('4e6f2070726f6772616d20617474616368656400000000000000000000000000') ||
+          msg.includes('No program attached')) {
+        window.dispatchEvent(new CustomEvent<string>("worker-log", { 
+          detail: `❌ No program is attached to this machine. Use 'projectfield' or another program attachment command first.` 
+        }));
+        return;
+      }
+      
       // Check for gas limit error
       if (msg.includes('0x34a44dbe') || 
           msg.includes('gas limit too low')) {

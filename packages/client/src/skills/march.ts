@@ -181,8 +181,11 @@ function parseExploreOutput(_recentCommands: string[], dir: Dir): ScanSummary | 
 // ---------- skill ----------
 
 export const marchSkill: Skill = async (ctx, dirArg?: string) => {
-  const dir = normalizeDirection(dirArg || "west");
-
+  if (!dirArg) {
+    await ctx.say?.("Usage: direction required for skill march <dir> (e.g., 'skill march north').");
+    return "blocked";
+  }
+  const dir = normalizeDirection(dirArg);
   // 1) get ScanSummary (cache -> ctx -> DOM parse -> explore)
   let sum = getCachedScan(dir) || ctx.latestScan(dir) || parseExploreOutput(ctx.recentCommands, dir);
   if (!sum) {
@@ -242,5 +245,5 @@ registerSkill("march", marchSkill, {
   requiredLevel: 2,
   description: "Consume up to 5 safe steps after an explore; Stops before water or other hazards like lava and unsafe drops!",
   args: ["<dir>"],
-  examples: ["first enter: explore west, then, skill march west, or skill march north"]
+  examples: ["first enter: explore west, then, skill march west"]
 });

@@ -59,14 +59,35 @@ function movesSinceExplore(recent: string[], dir: Dir): number {
 
 // ---------- parsing the last explore table from DOM ----------
 
-/** DOM parser for the last printed explore table → ScanSummary */
+/** DOM parser for the last printed explore table in the requested dir → ScanSummary */
 function parseExploreOutput(_recentCommands: string[], dir: Dir): ScanSummary | undefined {
-  const allPre = document.querySelectorAll<HTMLPreElement>(".explore-output");
-  const pre = allPre[allPre.length - 1];
-  if (!pre) return undefined;
+  const want = normalizeDirection(dir);
 
-  // Collect all blocks
-  const nodes = pre.querySelectorAll<HTMLElement>(".clickable-block");
+  // Find the most recent .explore-output that matches the requested direction
+  const pres = Array.from(document.querySelectorAll<HTMLPreElement>(".explore-output"));
+  let matchedPre: HTMLPreElement | null = null;
+
+  for (let i = pres.length - 1; i >= 0; i--) {
+    const pre = pres[i];
+    const text = (pre.textContent || pre.innerText || "").toLowerCase();
+
+    // Try to read the "Exploring XXX from" header that is printed with each table
+    // e.g., "Exploring SOUTHWEST from (-1312, 72, 593) — clicks will queue build:"
+    const m = text.match(/exploring\s+([a-z]+)\s+from/);
+    if (!m) continue;
+
+    const seen = normalizeDirection(m[1] as Dir);
+    if (seen === want) {
+      matchedPre = pre;
+      break;
+    }
+  }
+
+  // No explore table for this direction in the DOM → force a fresh explore
+  if (!matchedPre) return undefined;
+
+  // --- parse blocks from the matched <pre> only ---
+  const nodes = matchedPre.querySelectorAll<HTMLElement>(".clickable-block");
   const allBlocks: Array<{ x:number; y:number; z:number; name:string; distance:number; layer:number }> = [];
 
   nodes.forEach(el => {
@@ -78,25 +99,17 @@ function parseExploreOutput(_recentCommands: string[], dir: Dir): ScanSummary | 
       if (obj && typeof obj === "object" && "distance" in obj && "layer" in obj) {
         allBlocks.push(obj as any);
       }
-    } catch (_e) {
-      // ignore malformed JSON; keep callback non-empty for eslint(no-empty)
-      return;
-    }
+    } catch { /* ignore */ }
   });
 
   if (allBlocks.length === 0) {
     // Fallback attribute scrape (tolerates both " and ' quotes)
-    const html = pre.innerHTML;
+    const html = matchedPre.innerHTML;
     const attrRe = /data-block=(?:"([^"]+)"|'([^']+)')/g;
     let m: RegExpExecArray | null;
     while ((m = attrRe.exec(html))) {
       const json = (m[1] ?? m[2])!.replace(/&quot;/g, '"').replace(/&apos;/g, "'");
-      try {
-        allBlocks.push(JSON.parse(json));
-      } catch (_e) {
-        // skip bad attribute; keep loop non-empty
-        continue;
-      }
+      try { allBlocks.push(JSON.parse(json)); } catch { /* skip bad attribute */ }
     }
   }
 
@@ -123,9 +136,6 @@ function parseExploreOutput(_recentCommands: string[], dir: Dir): ScanSummary | 
     !!b && !isAir(b) && !isWater(b) && !isPassableVegetation(b) && !isLava(b);
 
   // Build 5 step infos with strict elevation rule + special-case for h=+2:
-  // allow h ∈ {+2, +1, 0, -1, -2} such that:
-  //  - [h] and [h+1] are walkable (for h=+2 we ASSUME [h+1]==+3 is Air)
-  //  - [h-1] is solid (immediate floor)
   const steps: StepInfo[] = [];
   for (let dist = 1; dist <= 5; dist++) {
     const m = byDist.get(dist) ?? new Map<number, any>();
@@ -134,7 +144,7 @@ function parseExploreOutput(_recentCommands: string[], dir: Dir): ScanSummary | 
     const water = [-3,-2,-1,0,1,2].some(L => isWater(cell(L)));
     const lava  = [-3,-2,-1,0,1,2].some(L => isLava(cell(L)));
 
-    const cand: Array<-2|-1|0|1|2> = [0, 1, 2, -1, -2]; // prefer level, +1, special +2, then downs
+    const cand: Array<-2|-1|0|1|2> = [0, 1, 2, -1, -2]; // prefer level, +1, +2, then downs
     let chosen: -2|-1|0|1|2|null = null;
 
     for (const h of cand) {
@@ -142,19 +152,14 @@ function parseExploreOutput(_recentCommands: string[], dir: Dir): ScanSummary | 
       const head = (h + 1) <= 2 ? cell(h + 1) : { name: "Air" }; // assume +3 is Air when h=+2
       const fl   = cell(h - 1);
 
-      const walkableHead = (h === 2) ? true : isWalkable(head); // special-case: treat +3 as Air
-      if (isWalkable(feet) && walkableHead && isSolidFloor(fl)) {
-        chosen = h; break;
-      }
+      const walkableHead = (h === 2) ? true : isWalkable(head); // treat +3 as Air
+      if (isWalkable(feet) && walkableHead && isSolidFloor(fl)) { chosen = h; break; }
     }
 
     const enterable = !lava && chosen !== null;
     steps.push({
-      dy: chosen,               // -2|-1|0|1|2|null
-      air2: chosen !== null,
-      hasWater: water,
-      hasLavaOrMagma: lava,
-      enterable
+      dy: chosen as any, air2: chosen !== null,
+      hasWater: water, hasLavaOrMagma: lava, enterable
     });
   }
 
@@ -170,7 +175,7 @@ function parseExploreOutput(_recentCommands: string[], dir: Dir): ScanSummary | 
     else break;
   }
 
-  return { dir, steps: steps as any, safe_len, water_at, hazard_at };
+  return { dir: want, steps: steps as any, safe_len, water_at, hazard_at };
 }
 
 // ---------- skill ----------

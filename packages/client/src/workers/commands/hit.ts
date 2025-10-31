@@ -1,7 +1,7 @@
 
 import { encodeFunctionData } from 'viem';
 import { CommandHandler, CommandContext } from './types';
-import { coordToChunkCoord, initChunkCommit, fulfillChunkCommit } from './chunkCommit';
+import { coordToChunkCoord, initChunkCommit, fulfillChunkCommit, packCoord96 } from './chunkCommit';
 import { addToQueue, queueSizeByAction } from "../../commandQueue";
 import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
@@ -46,6 +46,31 @@ async function hitWithOptionalTool(
       args: [caller, target, extraData],
     });
   }
+  
+  return sessionClient.sendTransaction({ to: worldAddress, data, gas });
+}
+
+async function hitForceFieldAtCoord(
+  sessionClient: { sendTransaction: (args: { to: `0x${string}`, data: `0x${string}`, gas: bigint }) => Promise<string> },
+  worldAddress: `0x${string}`,
+  params: {
+    caller: `0x${string}`;
+    coord: { x: number; y: number; z: number };
+    selectedToolSlot: number;
+    gas: bigint;
+  }
+) {
+  const { caller, coord, selectedToolSlot, gas } = params;
+  
+  console.log('[hit] Encoding with coords:', coord.x, coord.y, coord.z);
+  
+  const packedCoord = packCoord96(coord.x, coord.y, coord.z);
+  
+  const data = encodeFunctionData({
+    abi: IWorldAbi,
+    functionName: 'hitForceField',
+    args: [caller, packedCoord, selectedToolSlot],
+  });
   
   return sessionClient.sendTransaction({ to: worldAddress, data, gas });
 }
@@ -103,6 +128,84 @@ export class HitCommand implements CommandHandler {
         detail: `✅ Queued ${tuples.length} hit target(s). (${n} queued). Type 'done' to execute.`
       }));
       return;
+    }
+
+    // Check for "hit forcefield x y z" format
+    if (args.length >= 4 && args[0].toLowerCase() === 'forcefield') {
+      console.log('[hit] Forcefield args received:', args);
+      const x = parseInt(args[1], 10);
+      const y = parseInt(args[2], 10);
+      const z = parseInt(args[3], 10);
+      
+      console.log('[hit] Parsed coordinates:', { x, y, z });
+      
+      if (isNaN(x) || isNaN(y) || isNaN(z)) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `❌ Invalid coordinates. Usage: hit forcefield x y z`
+        }));
+        return;
+      }
+
+      const entityId = encodePlayerEntityId(context.address);
+      const equippedTool = (globalThis as typeof globalThis & { equippedTool: { slot: number; type: string; name: string } | null }).equippedTool;
+      const selectedToolSlot = equippedTool ? equippedTool.slot : 0;
+
+      try {
+        const txHash = await hitForceFieldAtCoord(context.sessionClient, WORLD_ADDRESS, {
+          caller: entityId,
+          coord: { x, y, z },
+          selectedToolSlot,
+          gas: 300000n,
+        });
+
+        const toolText = equippedTool ? ` using ${equippedTool.type}` : '';
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `⚔️ Hit force field at (${x}, ${y}, ${z})${toolText}. Tx: ${txHash}` 
+        }));
+        return;
+      } catch (error) {
+        const errorMessage = String(error);
+        
+        // Check for "No force field at this location" error
+        if (errorMessage.includes('4e6f20666f726365206669656c642061742074686973206c6f636174696f6e00') ||
+            errorMessage.includes('No force field at this location')) {
+          window.dispatchEvent(new CustomEvent("worker-log", {
+            detail: `❌ No force field found at coordinates (${x}, ${y}, ${z}). Use 'sense ${x} ${y} ${z}' to check if there's an active force field at this location.`
+          }));
+          return;
+        }
+        
+        // Check for "Entity is too far" error
+        if (errorMessage.includes('456e7469747920697320746f6f20666172000000000000000000000000000000') ||
+            errorMessage.includes('Entity is too far')) {
+          window.dispatchEvent(new CustomEvent("worker-log", {
+            detail: `❌ Force field at (${x}, ${y}, ${z}) is too far away to hit. You need to move closer to the force field before attacking it.`
+          }));
+          return;
+        }
+        
+        // Check for gas issues
+        if (errorMessage.includes('0x34a44dbe') || errorMessage.includes('gas limit too low')) {
+          window.dispatchEvent(new CustomEvent("worker-log", {
+            detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.`
+          }));
+          return;
+        }
+        
+        // Check for energy issues (player is dead)
+        if (errorMessage.includes('Entity has no energy') || 
+            errorMessage.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+          window.dispatchEvent(new CustomEvent("worker-log", {
+            detail: `💀 You are dead. Spawn to be reborn.`
+          }));
+          return;
+        }
+        
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: `❌ Failed to hit force field: ${errorMessage}`
+        }));
+        return;
+      }
     }
 
     // Parse coordinates from JSON (from explore clicks) or default to player feet

@@ -105,11 +105,11 @@ const PERSONA_PRESETS: Record<PersonaKey, { label: string; system: string; allow
     system:
       [
         "## Persona: Dusty Comedian",
-        "- Prefer a brief witty one-liner (apostrophe line) ONLY when the last visible human line ends with a question mark (?).",
+        "- Prefer a brief witty one-liner, (apostrophe line). You are a futuristic woman who believes you and the person you are talking to are people who were born in the game with a virtual form of consciousness.",
         "- Keep jokes short and clean; never block gameplay.",
-        "- When not asked a question, follow base traversal/safety rules normally.",
+        "- When not responding to human speech, ponder the environment that you see when looking or explore.",
       ].join("\n"),
-    allowed: ["look", "explore ", "skill march ", "inventory", "'"],
+    allowed: ["look", "explore ", "inventory", "explore north","explore south","explore east","explore west", "skill march north","skill march east","skill march south","skill march west","'"],
   },
   nav: {
     label: "Dusty Navigation Assist",
@@ -129,10 +129,11 @@ const PERSONA_PRESETS: Record<PersonaKey, { label: string; system: string; allow
         "Goal: find tree logs quickly and safely using only explore + march.",
         "Log names (case-insensitive): OakLog, SpruceLog, JungleLog, AcaciaLog, BirchLog, SakuraLog.",
         "Passable-as-air: Air, SwitchGrass, Fescue, Vines, HempBush, CottonBush, BambooBush, Flower, WheatSeed.",
-        "Scoring from `explore <dir>` (Blocks 1–3): +5 log at +0/+1; +3 log at +2; -5 water/lava in Blocks 1–2; +1 per passable (+0/+1). Ties: prefer a direction not explored last turn.",
-        "Loop: if no fresh scan: `explore <dir>`; if safe per score: `skill march <dir>`; never repeat the same `explore <dir>` twice without a move; when adjacent to a log, step next to it then `mine` (bare).",
+        "Scoring from `explore <dir>` (Blocks 1–3): +5 log at +0/+1; +3 log at +2; -5 lava in Blocks 1–2; +1 per passable (+0/+1). Ties: prefer a direction not explored last turn.",
+        "Loop: if no fresh scan: `explore <dir>`; if safe per score: `skill march <dir>`; never repeat the same `explore <dir>` twice without a move.",
+        "When finding a log, stop and repeatedly say 'Found a log!'.",
       ].join("\n"),
-    allowed: ["explore ", "skill march ", "mine"],
+    allowed: ["look", "explore ", "inventory", "explore north","explore south","explore east","explore west", "skill march north","skill march east","skill march south","skill march west","'"],
   },
 };
 

@@ -7,8 +7,8 @@ export class HelpCommand implements CommandHandler {
       '  Basic Game Commands: Explore is the most useful as it tells you details about your environment. You can Explore West (or any direction) to see further. And Explore mine west or build west to toggle between mining or building. ', 
       '       [Spawn] if it doesnt work, try again,', 
       '       [Look]/l check your location,', 
-      '       [Move] move carefully in a direction, directions: north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw),',
-      '       [Move] fast alternate syntax, you might fall if you dont plan ahead!: Ex: move e e e e e to sprint multiple moves in one transaction, will fail if no path,',
+      '       [Move] <dir> (move one block in a direction, directions: north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw),',
+      '       [Move] <dir> <dir> <dir> ...fast alternate syntax, you might fall if you dont plan ahead!: Ex: move e e e e e to sprint multiple moves in one transaction, will fail if no path,',
       '       [Survey] detailed horizon sensing - slow wide search for water,',
       '       [Health]/hp,', 
       '       [Explore]/exp examine your immediate environment, set command mine/water/build/till/fill to allow precise block selection,',
@@ -29,7 +29,9 @@ export class HelpCommand implements CommandHandler {
       '       [Equip] use a tool from your inventory. Try using axe for wood, and a pick for seed harvesting,',
       '       [Unequip] stop using your current tool, they break with use!,',
       '       [Eat] first equip the food, then eat food to restore health,',
+      '  Combat Commands:',
       '       [Hit] other players with or without an equipped tool, also loots a dead player if standing above them,',
+      '       [Hit forcefield x y z] attack a force field at specific coordinates, hit forcefield x y z,',
       '  Force Fields Commands:',
       '       [Energize] power machines with equipped batteries, energize <amount> (default: 1),',
       '       [Sense] check force field status at your location, or at a specific coordinate, sense x y z,',
@@ -42,7 +44,9 @@ export class HelpCommand implements CommandHandler {
       '       [Wakeup] awaken from bed to continue adventuring, or wakeup x y z to specify a location 1 block above bed,',
       '       [Scan] search for nearby players, scan <radius> (default: 10),',
       '       [Loot] collect items at your feet, or at a specific coordinate, loot x y z,',
-      '       [Chest] open chest at your feet, or at a specific coordinate, chest x y z,',
+      '       [Chest] open chest at your feet, or at a specific coordinate to place or remove items, chest x y z,',
+      '       [Building Text Sign for Customized Room] You will need the entityID (bytes32) after crafting it and building it. Run detach x y z of the sign location to get the entityID,',
+      '       <a href="https://explorer.mud.dev/redstone/worlds/0x253eb85B3C953bFE3827CC14a151262482E7189C/interact?expanded=permutation%2C0x73797065726d75746174696f6e00000043697479436f756e63696c5797374656%2C0x73797065726d75746174696f6e000000546578745369676e50726f6772616d00%2Cdfprograms_1%2C0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379#0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379-0xa00a8b53213bc20902cf4b609fba9f2e72ff076909819fe5a7c50130af1e3c74" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">Custom Room Description</a>,',
       '  AI Commands:',                  
       '       [RegisterAI] configure AI assistant settings for AI mode,',
       '       [CustomAI] add custom instructions to future AI prompts, movement directions, personality,',
@@ -56,7 +60,7 @@ export class HelpCommand implements CommandHandler {
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',
       '  System: help/h, clear, balance/bal, players/who,',
       '  Debug: check forcefield ownership for EOA and session account',
-      '  Key Notes: When in explore looking for a space to move, if you see only AIR in a direction, you will take significant damage. Try placing a block first!',
+      '  Key Notes: When in explore, looking for a space to move, if you see only AIR in a direction, you will take significant damage. Try placing a block first! Safest movement is with level 2 march skill command!',
       '  Dangers of Batch Mining.  Dont do it for ores! You will die!'
     ];
     
@@ -67,6 +71,7 @@ export class HelpCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

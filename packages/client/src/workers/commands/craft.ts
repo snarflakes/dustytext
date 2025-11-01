@@ -336,7 +336,7 @@ export class CraftCommand implements CommandHandler {
     try {
       const itemName = args.join(" ").trim();
       if (!itemName) {
-        log("❓ Usage: craft <item name> (e.g., 'craft wooden axe')");
+        log("❓ Craft what? Try collecting wood to craft planks and then craft a bench which enables you to craft an axe or a pick! Some recipes require a workbench below you or to the immediate block n/w/s/e of you. <a href='https://github.com/snarflakes/dustytext/blob/master/packages/client/src/recipes.ts' target='_blank' class='text-blue-400 hover:underline'>Click here for recipes!</a>");
         return;
       }
 

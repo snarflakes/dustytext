@@ -461,9 +461,13 @@ export function App() {
         
     } else if (command === 'inventory' || command === 'inv' || command === 'i') {
       runCommand('inventory');
-    } else if (command.startsWith('craft ')) {
-      const itemName = command.substring(6); // Remove 'craft ' prefix
-      runCommand(`craft ${itemName}`);
+    } else if (command === 'craft' || command.startsWith('craft ')) {
+      if (command === 'craft') {
+        runCommand('craft'); // Pass empty craft command to worker
+      } else {
+        const itemName = command.substring(6); // Remove 'craft ' prefix
+        runCommand(`craft ${itemName}`);
+      }
     } else if (command.startsWith('equip ')) {
       const toolName = command.substring(6); // Remove 'equip ' prefix
       runCommand(`equip ${toolName}`);

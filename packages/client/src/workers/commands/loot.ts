@@ -113,24 +113,44 @@ async function debugInventoryTable() {
 }
 
 export class LootCommand implements CommandHandler {
-  async execute(context: CommandContext): Promise<void> {
+  async execute(context: CommandContext, ...args: string[]): Promise<void> {
     try {
       // Debug first to see what's in the table
       await debugInventoryTable();
       
       const playerEntityId = encodePlayerEntityId(context.address);
       
-      const position = await getPlayerPosition(playerEntityId);
-      if (!position) {
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "❌ Could not determine your position" 
-        }));
-        return;
+      let position: { x: number, y: number, z: number };
+      
+      // Check if coordinates were provided as arguments
+      if (args.length >= 3) {
+        const x = parseInt(args[0], 10);
+        const y = parseInt(args[1], 10);
+        const z = parseInt(args[2], 10);
+        
+        if (isNaN(x) || isNaN(y) || isNaN(z)) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: "❌ Invalid coordinates. Usage: loot [x y z]" 
+          }));
+          return;
+        }
+        
+        position = { x, y, z };
+      } else {
+        // Use player's current position
+        const playerPos = await getPlayerPosition(playerEntityId);
+        if (!playerPos) {
+          window.dispatchEvent(new CustomEvent("worker-log", { 
+            detail: "❌ Could not determine your position" 
+          }));
+          return;
+        }
+        position = playerPos;
       }
 
       const blockEntityId = encodeBlock([position.x, position.y, position.z]);
       
-      console.log('Loot: Player position:', position);
+      console.log('Loot: Target position:', position);
       console.log('Loot: Block entity ID:', blockEntityId);
 
       const blockItems = await getBlockInventory(blockEntityId);

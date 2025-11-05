@@ -104,6 +104,7 @@ function createClickableBlock(block: SelectableBlock): string {
     block.name.toLowerCase().includes(plant.toLowerCase())
   );
   const isWater = block.name.toLowerCase().includes("water");
+  const isLava = block.name.toLowerCase().includes("lava") || block.name.toLowerCase().includes("magma");
   const isMachine = ["workbench", "powerstone", "forcefield machine", "furnace", "spawntile", "bed", "chest", "ForceField", "torch", "textsign", "a glowing orb", "emanating mind threads"].some(machine => 
     block.name.toLowerCase().includes(machine.toLowerCase())
   );
@@ -113,8 +114,9 @@ function createClickableBlock(block: SelectableBlock): string {
   const grownClass = isGrownWheat ? " grown" : "";
   const passableClass = isPassableVegetation ? " passable-vegetation" : "";
   const waterClass = isWater ? " water" : "";
+  const lavaClass = isLava ? " lava" : "";
   const machineClass = isMachine ? " machine" : "";
-  const cls = `clickable-block${airClass}${grownClass}${passableClass}${waterClass}${machineClass}`;
+  const cls = `clickable-block${airClass}${grownClass}${passableClass}${waterClass}${lavaClass}${machineClass}`;
 
   const link = `<span class="${cls}"
       data-block='${JSON.stringify(block)}'

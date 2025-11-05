@@ -376,5 +376,14 @@ button[data-testid*="connect"]:hover {
   background-color: rgba(135, 206, 235, 0.2) !important;
 }
 
+.clickable-block.lava {
+  color: #FF6347 !important; /* Red-orange color */
+  background-color: rgba(255, 99, 71, 0.1) !important;
+  font-style: italic !important;
+}
 
+.clickable-block.lava:hover {
+  color: #DC143C !important;
+  background-color: rgba(255, 99, 71, 0.2) !important;
+}
 

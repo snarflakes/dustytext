@@ -38,6 +38,7 @@ import { WakeupCommand } from './wakeup';
 import { ClaimMachineCommand } from './machinemanager';
 import { SkillCommand } from './skill';
 import { InfoCommand } from './info';
+import { MapCommand } from './map.js';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -78,6 +79,7 @@ commands.set('claimmachine', new ClaimMachineCommand());
 commands.set('skill', new SkillCommand());
 commands.set('skills', new SkillCommand()); // Allow both forms
 commands.set('info', new InfoCommand());
+commands.set('map', new MapCommand());
 
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"
@@ -99,23 +101,3 @@ export function registerCommand(name: string, handler: CommandHandler): void {
 
 // Add after other command registrations
 commands.set('delegate', new DelegateCommand());
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

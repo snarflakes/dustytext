@@ -542,6 +542,8 @@ export function App() {
       runCommand(command);
     } else if (command === 'delegate' || command.startsWith('delegate ')) {
       runCommand(command);
+    } else if (command === 'map' || command.startsWith('map ')) {
+      runCommand(command.trim());
     } else {
       setLog(prev => [...prev, `🤖 Unknown command: ${command}. Type 'help' for commands.`]);
     }

@@ -39,6 +39,7 @@ export class HelpCommand implements CommandHandler {
       '       [Detach] remove force field or program from a machine, or from your location, example detach x y z,',
       '       [ClaimField x y z] expand access to specified force field to EOA account,',
       '       [ClaimMachine x y z] expand access to specified machine to EOA account, claimmachine x y z, or claimmachine to use your current location, if you are on a machine block, or in a force field, it will use that location,',
+      '       [TransferField x y z] transfer force field to another machine, or to your location, transferfield x y z, or transferfield to use your current location, if you are on a machine block, or in a force field, it will use that location, you must own the force field to transfer it, you can check with sense command.',
       '  Other World Commands:',
       '       [Sleep] rest in a bed to guard health and energy,',
       '       [Wakeup] awaken from bed to continue adventuring, or wakeup x y z to specify a location 1 block above bed,',

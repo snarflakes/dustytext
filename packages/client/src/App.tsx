@@ -544,6 +544,8 @@ export function App() {
       runCommand(command);
     } else if (command === 'map' || command.startsWith('map ')) {
       runCommand(command.trim());
+    } else if (command === 'transferfield' || command === 'tf' || command.startsWith('transferfield ') || command.startsWith('tf ')) {
+      runCommand(command.trim());
     } else {
       setLog(prev => [...prev, `🤖 Unknown command: ${command}. Type 'help' for commands.`]);
     }

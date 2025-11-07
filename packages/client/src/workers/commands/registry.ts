@@ -39,6 +39,7 @@ import { ClaimMachineCommand } from './machinemanager';
 import { SkillCommand } from './skill';
 import { InfoCommand } from './info';
 import { MapCommand } from './map.js';
+import { TransferFieldCommand } from './transferfield';
 
 const commands = new Map<string, CommandHandler>();
 
@@ -80,6 +81,7 @@ commands.set('skill', new SkillCommand());
 commands.set('skills', new SkillCommand()); // Allow both forms
 commands.set('info', new InfoCommand());
 commands.set('map', new MapCommand());
+commands.set('transferfield', new TransferFieldCommand());
 
 // special AI commands
 commands.set('ai', new AICommand());        // "ai" / "ai auto"

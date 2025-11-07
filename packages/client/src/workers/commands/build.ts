@@ -25,6 +25,16 @@ function isFarmlandName(name?: string): boolean {
   return !!name && /(wet)?\s*farmland|tilled/i.test(name);
 }
 
+function isBedTool(tool: EquippedTool): boolean {
+  if (!tool) return false;
+  return /bed/i.test(tool.type) || (!!tool.name && /bed/i.test(tool.name));
+}
+
+function isOrientationSensitive(tool: EquippedTool): boolean {
+  if (!tool) return false;
+  return isBedTool(tool); // Add other orientation-sensitive items here
+}
+
 async function getPlayerPos(entityId: string) {
   const q = `SELECT "x","y","z" FROM "${POSITION_TABLE}" WHERE "entityId"='${entityId}'`;
   const res = await fetch(INDEXER_URL, {
@@ -102,11 +112,23 @@ export class BuildCommand implements CommandHandler {
         }));
 
         const packed = packCoord96(x, y, z);
-        const data = encodeFunctionData({
-          abi: IWorldAbi,
-          functionName: "build",
-          args: [entityId, packed, equippedTool.slot, "0x"],
-        });
+        
+        let data;
+        if (isOrientationSensitive(equippedTool)) {
+          // Use buildWithOrientation for beds and other orientation-sensitive items
+          // Default to north (0) orientation - could be made configurable
+          data = encodeFunctionData({
+            abi: IWorldAbi,
+            functionName: "buildWithOrientation",
+            args: [entityId, packed, equippedTool.slot, 0, "0x"],
+          });
+        } else {
+          data = encodeFunctionData({
+            abi: IWorldAbi,
+            functionName: "build",
+            args: [entityId, packed, equippedTool.slot, "0x"],
+          });
+        }
 
         const txHash = await context.sessionClient.sendTransaction({
           to: WORLD_ADDRESS,
@@ -193,6 +215,11 @@ export class BuildCommand implements CommandHandler {
                  errorMessage.includes("426c75657072696e74206e6f742073657420666f7220636f6f72640000000000")) {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ No blueprint set for this location. The forcefield owner needs to create a build plan here first before blocks can be placed."
+        }));
+      } else if (errorMessage.includes("Orientation not supported") ||
+                 errorMessage.includes("4f7269656e746174696f6e206e6f7420737570706f7274656400000000000000")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ Bed cannot be placed in this orientation. Try placing it against a wall or in a different direction. Beds need proper support and orientation to be placed."
         }));
       } else {
         window.dispatchEvent(new CustomEvent("worker-log", {

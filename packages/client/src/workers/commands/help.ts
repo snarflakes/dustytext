@@ -41,7 +41,7 @@ export class HelpCommand implements CommandHandler {
       '       [ClaimMachine x y z] expand access to specified machine to EOA account, claimmachine x y z, or claimmachine to use your current location, if you are on a machine block, or in a force field, it will use that location,',
       '       [TransferField x y z] transfer force field to another machine, or to your location, transferfield x y z, or transferfield to use your current location, if you are on a machine block, or in a force field, it will use that location, you must own the force field to transfer it, you can check with sense command.',
       '  Other World Commands:',
-      '       [Sleep] rest in a bed to guard health and energy,',
+      '       [Sleep] rest in a bed to guard health and energy. Only works inside of a authenticated force field,',
       '       [Wakeup] awaken from bed to continue adventuring, or wakeup x y z to specify a location 1 block above bed,',
       '       [Scan] search for nearby players, scan radius (default: 10),',
       '       [Loot] collect items at your feet, or at a specific coordinate, loot x y z,',

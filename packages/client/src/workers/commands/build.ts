@@ -32,7 +32,7 @@ function isBedTool(tool: EquippedTool): boolean {
 
 function isOrientationSensitive(tool: EquippedTool): boolean {
   if (!tool) return false;
-  return isBedTool(tool); // Add other orientation-sensitive items here
+  return isBedTool(tool);
 }
 
 async function getPlayerPos(entityId: string) {
@@ -114,13 +114,17 @@ export class BuildCommand implements CommandHandler {
         const packed = packCoord96(x, y, z);
         
         let data;
+        let orientation = 0; // Default for most items
+        if (isBedTool(equippedTool)) {
+          orientation = 1; // Use supported orientation for beds
+        }
+
         if (isOrientationSensitive(equippedTool)) {
           // Use buildWithOrientation for beds and other orientation-sensitive items
-          // Default to north (0) orientation - could be made configurable
           data = encodeFunctionData({
             abi: IWorldAbi,
             functionName: "buildWithOrientation",
-            args: [entityId, packed, equippedTool.slot, 0, "0x"],
+            args: [entityId, packed, equippedTool.slot, orientation, "0x"],
           });
         } else {
           data = encodeFunctionData({

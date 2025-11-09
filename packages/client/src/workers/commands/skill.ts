@@ -5,6 +5,7 @@ import { getCommand } from './registry';
 
 // Import skills to ensure they're registered
 import '../../skills/march';
+import '../../skills/automine';
 
 export class SkillCommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
@@ -55,6 +56,8 @@ export class SkillCommand implements CommandHandler {
     }
   }
 }
+
+
 
 
 

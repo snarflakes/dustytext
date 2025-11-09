@@ -7,7 +7,7 @@ import { queryIndexer } from './queryIndexer';
 import { resourceToHex } from '@latticexyz/common';
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
 import { countBlocksForMine } from "../../progress/blockcount";
-import { loadProgress, saveProgress, maybeLevelUp } from "../../progress/model";
+import { loadProgress, saveProgress, maybeLevelUp, ensureUnlocked } from "../../progress/model";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
@@ -430,6 +430,13 @@ export class MineCommand implements CommandHandler {
             window.dispatchEvent(new CustomEvent("worker-log", { 
               detail: `🎉 Level up! You reached Level ${prog.level}.` 
             }));
+            
+            if (prog.level >= 3) {
+              ensureUnlocked(prog, "mine");
+              window.dispatchEvent(new CustomEvent("worker-log", { 
+                detail: `🎉 Skill unlocked: MINE (use: "skill mine")` 
+              }));
+            }
           }
           saveProgress(playerId, prog);
         }

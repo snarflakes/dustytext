@@ -1,4 +1,5 @@
 import { Skill, registerSkill } from './types';
+import { addToQueue } from '../commandQueue';
 
 export const automineSkill: Skill = async (ctx) => {
   // 1. Parse DOM for latest .explore-output
@@ -11,7 +12,8 @@ export const automineSkill: Skill = async (ctx) => {
   const latestPre = pres[pres.length - 1];
   const blocks = latestPre.querySelectorAll<HTMLElement>(".clickable-block");
   
-  let queuedCount = 0;
+  const grassBlocks: Array<{x: number, y: number, z: number}> = [];
+  
   blocks.forEach(el => {
     const raw = el.getAttribute("data-block");
     if (!raw) return;
@@ -21,21 +23,26 @@ export const automineSkill: Skill = async (ctx) => {
       const name = block.name?.toLowerCase() || '';
       
       if (name.includes('switchgrass') || name.includes('fescue')) {
-        // Simulate click to add to mine queue
-        el.click();
-        queuedCount++;
+        grassBlocks.push({
+          x: Number(block.x),
+          y: Number(block.y), 
+          z: Number(block.z)
+        });
       }
     } catch { /* ignore */ }
   });
 
-  if (queuedCount === 0) {
+  if (grassBlocks.length === 0) {
     await ctx.say?.("No grass blocks found in recent explore.");
     return "done";
   }
 
-  // Execute the queue
+  // Use the queue system for batch mining
+  addToQueue("mine", grassBlocks, "ai");
+  await ctx.say?.(`Queued ${grassBlocks.length} grass blocks for mining.`);
+  
+  // Execute the queue (this will use batch mining if tool equipped)
   await ctx.exec("done");
-  await ctx.say?.(`Auto-mined ${queuedCount} grass blocks.`);
   return "done";
 };
 
@@ -45,4 +52,5 @@ registerSkill("mine", automineSkill, {
   args: [], // Add this empty array for consistent formatting
   examples: ["explore west", "skill mine"]
 });
+
 

@@ -160,6 +160,34 @@ export class SleepCommand implements CommandHandler {
       );
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
+      
+      // Check for "Bed is not inside a forcefield" error
+      if (msg.includes('426564206973206e6f7420696e73696465206120666f7263656669656c640000') ||
+          msg.includes('Bed is not inside a forcefield')) {
+        window.dispatchEvent(
+          new CustomEvent("worker-log", { detail: `🛡️ The bed must be inside a forcefield to sleep safely. Place the bed within your protected area.` })
+        );
+        return;
+      }
+      
+      // Check for gas limit error
+      if (msg.includes('0x34a44dbe') || 
+          msg.includes('gas limit too low')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+        }));
+        return;
+      }
+      
+      // Check for energy error (player is dead)
+      if (msg.includes('Entity has no energy') || 
+          msg.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
+        }));
+        return;
+      }
+      
       window.dispatchEvent(
         new CustomEvent("worker-log", { detail: `❌ Sleep failed: ${msg}` })
       );

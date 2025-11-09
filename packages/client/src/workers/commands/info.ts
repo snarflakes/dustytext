@@ -15,6 +15,7 @@ export class InfoCommand implements CommandHandler {
         `📊 Player Information:`,
         `  Level: ${progress.level}`,
         `  Total Steps Taken: ${progress.tilesMoved}`,
+        `  Total Blocks Mined: ${progress.blocksMined}`,
         `  Skills Learned: ${skillsList}`
       ];
       

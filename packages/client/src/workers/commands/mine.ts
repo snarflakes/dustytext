@@ -6,6 +6,8 @@ import { parseTuplesFromArgs, looksLikeJsonCoord } from "../../utils/coords";
 import { queryIndexer } from './queryIndexer';
 import { resourceToHex } from '@latticexyz/common';
 import IWorldAbi from "@dust/world/out/IWorld.sol/IWorld.abi";
+import { countBlocksForMine } from "../../progress/blockcount";
+import { loadProgress, saveProgress, maybeLevelUp, ensureUnlocked } from "../../progress/model";
 
 const INDEXER_URL = "https://indexer.mud.redstonechain.com/q";
 const WORLD_ADDRESS = '0x253eb85B3C953bFE3827CC14a151262482E7189C';
@@ -244,6 +246,19 @@ export class MineCommand implements CommandHandler {
           detail: `⛏️ Batch mined ${blocks.length} blocks using ${equippedTool.type}. Tx: ${txHash}`,
         })
       );
+
+      // Track batch mining progress
+      const playerId = context.address;
+      const prog = loadProgress(playerId);
+      prog.blocksMined += blocks.length;
+
+      const leveled = maybeLevelUp(prog);
+      if (leveled) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `🎉 Level up! You reached Level ${prog.level}.` 
+        }));
+      }
+      saveProgress(playerId, prog);
     } catch (error) {
       const errorMessage = String(error);
       
@@ -399,8 +414,33 @@ export class MineCommand implements CommandHandler {
         });
 
         const targetText = coords ? ` at (${mineX}, ${mineY}, ${mineZ})` : (target === 'down' ? ' down' : (target ? ` ${target}` : ''));
-        //const positionText = `(${mineX}, ${mineY}, ${mineZ})`;
         const toolText = hasToolEquipped ? ` using ${equippedTool.type}` : '';
+
+        // Track mining progress
+        const playerId = context.address;
+        const mineCommand = args.length > 0 ? `mine ${args.join(' ')}` : 'mine';
+        const blocks = countBlocksForMine(mineCommand);
+
+        if (blocks > 0) {
+          const prog = loadProgress(playerId);
+          prog.blocksMined += blocks;
+
+          const leveled = maybeLevelUp(prog);
+          if (leveled) {
+            window.dispatchEvent(new CustomEvent("worker-log", { 
+              detail: `🎉 Level up! You reached Level ${prog.level}.` 
+            }));
+            
+            if (prog.level >= 3) {
+              ensureUnlocked(prog, "mine");
+              window.dispatchEvent(new CustomEvent("worker-log", { 
+                detail: `🎉 Skill unlocked: MINE (use: "skill mine")` 
+              }));
+            }
+          }
+          saveProgress(playerId, prog);
+        }
+
         window.dispatchEvent(new CustomEvent("worker-log", { 
           detail: `⛏️ Mining${targetText} completed${toolText}. Tx: ${txHash}` 
         }));

@@ -341,6 +341,13 @@ export class MoveCommand implements CommandHandler {
                 detail: `[SYSTEM] Skill unlocked: MARCH (use: "skill march <dir>")` 
               }));
             }
+            
+            if (prog.level >= 3) {
+              ensureUnlocked(prog, "mine");
+              window.dispatchEvent(new CustomEvent("worker-log", { 
+                detail: `[SYSTEM] Skill unlocked: MINE (use: "skill mine")` 
+              }));
+            }
           }
           saveProgress(playerId, prog);
         }

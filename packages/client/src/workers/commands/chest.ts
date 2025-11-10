@@ -482,8 +482,37 @@ export class ChestCommand implements CommandHandler {
 
     } catch (error) {
       delete (globalThis as any).chestInteraction;
+      const errorMessage = String(error);
+      
+      // Check for chest access permission error
+      if (errorMessage.includes('Only approved callers can transfer to/from the chest') ||
+          errorMessage.includes('4f6e6c7920617070726f7665642063616c6c6572732063616e207472616e7366657220746f2f66726f6d20746865206368657374')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `🔒 This chest is privately owned. You need permission from the owner to access it.` 
+        }));
+        return;
+      }
+      
+      // Check for gas limit error
+      if (errorMessage.includes('0x34a44dbe') || 
+          errorMessage.includes('gas limit too low')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `❌ You are out of gas. Click Orange Square in the top right corner and "Top Up" Gas.` 
+        }));
+        return;
+      }
+      
+      // Check for energy error (player is dead)
+      if (errorMessage.includes('Entity has no energy') || 
+          errorMessage.includes('456e7469747920686173206e6f20656e65726779000000000000000000000000')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `💀 You are dead. Remember your energy depletes every minute (even while away) and more so with every move you make... "Spawn" to be reborn into new life.` 
+        }));
+        return;
+      }
+      
       window.dispatchEvent(new CustomEvent("worker-log", { 
-        detail: `❌ Transfer failed: ${String(error)}` 
+        detail: `❌ Transfer failed: ${errorMessage}` 
       }));
     }
   }

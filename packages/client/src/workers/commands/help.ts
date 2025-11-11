@@ -55,8 +55,9 @@ export class HelpCommand implements CommandHandler {
       '  Level and Skills:',
       '       [Info] check your level and progress, including steps taken and skills learned, move 5 times to get to level 2, for level 3???',
       '       [Skills] check your level and unlocked skills,',
-      '       [Skill <name> ...] invoke a skill, e.g., skill march west,',
-      '       [Skill Info <name>] check a skill\'s details, e.g., skill info march,',
+      '       [Skill name ...] invoke a skill, e.g., skill march west,',
+      '       [Skill Info name] check a skill\'s details, e.g., skill info march,',
+      '       [Transfer token_address] - transfer ERC20 tokens from session to EOA account,',
       
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',
       '  System: help/h, clear, balance/bal, players/who,',
@@ -72,6 +73,7 @@ export class HelpCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

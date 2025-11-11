@@ -225,6 +225,11 @@ export class BuildCommand implements CommandHandler {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ Bed cannot be placed in this orientation. Try placing it against a wall or in a different direction. Beds need proper support and orientation to be placed."
         }));
+      } else if (errorMessage.includes("0x7bfa4b9f") ||
+                 errorMessage.includes("reverted during simulation with reason: 0x7bfa4b9f")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ Cannot build here - insufficient permissions or protected area. You may need to be inside your own forcefield or have proper building rights."
+        }));
       } else {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: `❌ Build failed: ${errorMessage}`

@@ -53,7 +53,8 @@ async function runWorkerCommand(command: string): Promise<void> {
 
   // Parse command and arguments
   const parts = command.split(' ');
-  const commandName = parts[0];
+  // Convert command to lowercase for consistent matching
+  const commandName = parts[0].toLowerCase();
   const args = parts.slice(1);
   
   console.log(`Parsed commandName: "${commandName}", args:`, args);

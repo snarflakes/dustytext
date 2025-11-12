@@ -668,6 +668,13 @@ export class MineCommand implements CommandHandler {
                 // Don't throw - let mining proceed and handle this during mining attempts
                 continue;
               }
+              if (reinitErrorMsg.includes('Existing chunk commitment') ||
+                  reinitErrorMsg.includes('4578697374696e67206368756e6b20636f6d6d69746d656e74')) {
+                window.dispatchEvent(new CustomEvent("worker-log", {
+                  detail: `❌ Chunk commitment conflict. Please wait 10 minutes and try mining again.`
+                }));
+                return;
+              }
               console.warn(`Failed to re-initialize chunk commitment:`, reinitError);
               throw reinitError;
             }
@@ -699,9 +706,11 @@ export class MineCommand implements CommandHandler {
         // Check for UserOperation simulation errors with chunk commitment expired (hex encoded)
         if (errorMessage.includes('UserOperation reverted during simulation') && 
             (errorMessage.includes('Chunk commitment expired') ||
+             errorMessage.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000') ||
              errorMessage.includes('0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000184368756e6b20636f6d6d69746d656e7420657870697265640000000000000000'))) {
+          
           window.dispatchEvent(new CustomEvent("worker-log", { 
-            detail: `❌ Mining failed: Chunk commitment expired during simulation. Try again.` 
+            detail: `❌ Chunk commitment expired. This is a blockchain timing issue - please wait 10 minutes and try mining again.` 
           }));
           return;
         }

@@ -45,18 +45,19 @@ export class HelpCommand implements CommandHandler {
       '       [Wakeup] awaken from bed to continue adventuring, or wakeup x y z to specify a location 1 block above bed,',
       '       [Scan] search for nearby players, scan radius (default: 10),',
       '       [Loot] collect items at your feet, or at a specific coordinate, loot x y z,',
-      '       [Chest] open chest at your feet, or at a specific coordinate to place or remove items, chest x y z,',
+      '       [Chest] open chest you are standing on, or at a specific coordinate to place or remove items, chest x y z,',
       '       [Building Text Sign for Customized Room] You will need the entityID (bytes32) after crafting it and building it. Run detach x y z of the sign location to get the entityID and enter it here: <a href="https://explorer.mud.dev/redstone/worlds/0x253eb85B3C953bFE3827CC14a151262482E7189C/interact?expanded=permutation%2C0x73797065726d75746174696f6e00000043697479436f756e63696c5797374656%2C0x73797065726d75746174696f6e000000546578745369676e50726f6772616d00%2Cdfprograms_1%2C0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379#0x7379646670726f6772616d735f31000044656661756c7450726f6772616d5379-0xa00a8b53213bc20902cf4b609fba9f2e72ff076909819fe5a7c50130af1e3c74" target="_blank" rel="noopener noreferrer" class="text-sky-400 hover:underline">Custom Room Description</a>.',
       '       [Map] save your location with a note, map note, map clear to clear all entries,',
+      '       [Delegate] address or delegate clear,delegate your dustforgeaccount to another address, or clear delegation,',
       '  AI Commands:',                  
       '       [RegisterAI] configure AI assistant settings for AI mode,',
       '       [CustomAI] add custom instructions to future AI prompts, movement directions, personality,',
-      '       [Council] address or council clear,delegate your dustforgeaccount to another address, or clear delegation,',
       '  Level and Skills:',
       '       [Info] check your level and progress, including steps taken and skills learned, move 5 times to get to level 2, for level 3???',
       '       [Skills] check your level and unlocked skills,',
-      '       [Skill <name> ...] invoke a skill, e.g., skill march west,',
-      '       [Skill Info <name>] check a skill\'s details, e.g., skill info march,',
+      '       [Skill name ...] invoke a skill, e.g., skill march west,',
+      '       [Skill Info name] check a skill\'s details, e.g., skill info march,',
+      '       [Transfer token_address] - transfer ERC20 tokens from session to EOA account,',
       
       '  Also move: north/n, south/s, east/e, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw, up/u,',
       '  System: help/h, clear, balance/bal, players/who,',
@@ -72,6 +73,7 @@ export class HelpCommand implements CommandHandler {
     }
   }
 }
+
 
 
 

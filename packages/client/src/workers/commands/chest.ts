@@ -181,42 +181,12 @@ export class ChestCommand implements CommandHandler {
 
       const blockEntityId = encodeBlock([position.x, position.y, position.z]);
       
-      // First check if there's actually a chest at this location
+      // Get chest inventory
       const blockItems = await getBlockInventory(blockEntityId);
-      
-      // Check if this is actually a chest by looking for chest-specific inventory structure
-      // A real chest will have inventory slots, while other blocks won't
-      const hasInventoryStructure = blockItems.length > 0;
-      
-      // Additional check: query the block type to confirm it's a chest
-      const blockTypeQuery = `SELECT "objectType" FROM "ObjectType" WHERE "entityId" = '${blockEntityId}'`;
-      const blockTypeResponse = await fetch(INDEXER_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ address: WORLD_ADDRESS, query: blockTypeQuery }])
-      });
-      
-      let isActualChest = false;
-      if (blockTypeResponse.ok) {
-        const blockTypeResult = await blockTypeResponse.json();
-        const blockTypeRows = blockTypeResult?.result?.[0];
-        if (Array.isArray(blockTypeRows) && blockTypeRows.length >= 2) {
-          const objectType = Number(blockTypeRows[1][0]);
-          // Check if this is a chest object type (you may need to adjust this based on your object IDs)
-          isActualChest = objectNamesById[objectType]?.toLowerCase().includes('chest') || false;
-        }
-      }
-      
-      if (!isActualChest && !hasInventoryStructure) {
-        window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `❌ No chest found at (${position.x}, ${position.y}, ${position.z}). Try standing on or near a chest, or specify coordinates.` 
-        }));
-        return;
-      }
       
       if (blockItems.length === 0) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: "📦 The chest is empty" 
+          detail: `❓ Are you sure there's a chest at (${position.x}, ${position.y}, ${position.z})? No items found. The chest might be empty or there might not be a chest there.` 
         }));
       } else {
         const itemList = blockItems.map(item => {

@@ -5,7 +5,8 @@ export class HelpCommand implements CommandHandler {
     const helpText = [
       '📖 Available commands:',
       '  Basic Game Commands: Explore is the most useful as it tells you details about your environment. You can Explore West (or any direction) to see further. And Explore mine west or build west to toggle between mining or building. ', 
-      '       [Spawn] if it doesnt work, try again,', 
+      '       [Spawn] if it doesnt work, try again,',
+      '       [Spawn entityID energy] to spawn to a specific location,', 
       '       [Look]/l check your location,', 
       '       [Move] dir (move one block in a direction, directions: north/n, east/e, south/s, west/w, northeast/ne, northwest/nw, southeast/se, southwest/sw),',
       '       [Move] dir dir dir ...fast alternate syntax, you might fall if you dont plan ahead!: Ex: move e e e e e to sprint multiple moves in one transaction, will fail if no path,',

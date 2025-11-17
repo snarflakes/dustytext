@@ -235,8 +235,23 @@ export const marchSkill: Skill = async (ctx, dirArg?: string) => {
     return "blocked";
   }
 
-  await ctx.exec(`move ${tokens.join(" ")}`); // e.g., "move up west west ..." or "move west down west ..."
-  return "done";
+  try {
+    await ctx.exec(`move ${tokens.join(" ")}`);
+    return "done";
+  } catch (error) {
+    const errorMessage = String(error);
+    
+    // Check for player blocking path (handle both direct message and UserOperationExecutionError wrapper)
+    if (errorMessage.includes('Cannot move through a player') ||
+        errorMessage.includes('43616e6e6f74206d6f7665207468726f756768206120706c6179657200000000') ||
+        errorMessage.includes('UserOperation reverted during simulation with reason: 0x08c379a00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001c43616e6e6f74206d6f7665207468726f756768206120706c6179657200000000')) {
+      await ctx.say?.(`❌ Another player is blocking your path ${dir}. Wait for them to move or try a different direction.`);
+      return "blocked";
+    }
+    
+    // Re-throw other errors to be handled by the move command's error handling
+    throw error;
+  }
 };
 
 // ---------- register ----------

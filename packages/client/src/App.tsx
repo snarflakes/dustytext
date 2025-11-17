@@ -410,8 +410,8 @@ export function App() {
     }
 
     // Game commands using workers
-    if (command === 'spawn') {
-      runCommand('spawn');
+    if (command === 'spawn' || command.startsWith('spawn ')) {
+      runCommand(command.trim());
     } else if (command === 'look' || command === 'l') {
       runCommand('look');
     } else if (command === 'info') {

@@ -485,11 +485,19 @@ export class ChestCommand implements CommandHandler {
       delete (globalThis as any).chestInteraction;
       const errorMessage = String(error);
       
+      // Check for token gating error (need specific tokens to access chest items)
+      if (errorMessage.includes('0xe450d38c')) {
+        window.dispatchEvent(new CustomEvent("worker-log", { 
+          detail: `🔐 This chest requires you to hold specific tokens in your wallet to access these items. Check if you need particular NFTs or tokens to unlock this chest.` 
+        }));
+        return;
+      }
+      
       // Check for inventory full error (chest is full)
       if (errorMessage.includes('Inventory is full') ||
           errorMessage.includes('496e76656e746f72792069732066756c6c')) {
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `📦 The chest is full and cannot hold more items. Try taking something out first.` 
+          detail: `📦 Cannot place items here. This might be because the chest is full, or there may not be a chest at this location.` 
         }));
         return;
       }

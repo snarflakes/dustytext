@@ -103,6 +103,9 @@ function createClickableBlock(block: SelectableBlock): string {
   const isPassableVegetation = ["switchgrass", "fescue", "vines", "hempbush", "cottonbush", "bamboobush", "flower", "wheatseed"].some(plant => 
     block.name.toLowerCase().includes(plant.toLowerCase())
   );
+  const isLog = ["sprucelog", "acacialog", "oaklog", "birchlog", "junglelog", "sakuralog", "darkoaklog", "mangrovelog"].some(log => 
+    block.name.toLowerCase().includes(log.toLowerCase())
+  );
   const isWater = block.name.toLowerCase().includes("water");
   const isLava = block.name.toLowerCase().includes("lava") || block.name.toLowerCase().includes("magma");
   const isMachine = ["workbench", "powerstone", "forcefield machine", "furnace", "spawntile", "bed", "chest", "ForceField", "torch", "textsign", "a glowing orb", "emanating mind threads"].some(machine => 
@@ -113,10 +116,11 @@ function createClickableBlock(block: SelectableBlock): string {
   const airClass = isAir ? " air-block" : "";
   const grownClass = isGrownWheat ? " grown" : "";
   const passableClass = isPassableVegetation ? " passable-vegetation" : "";
+  const logClass = isLog ? " log" : "";
   const waterClass = isWater ? " water" : "";
   const lavaClass = isLava ? " lava" : "";
   const machineClass = isMachine ? " machine" : "";
-  const cls = `clickable-block${airClass}${grownClass}${passableClass}${waterClass}${lavaClass}${machineClass}`;
+  const cls = `clickable-block${airClass}${grownClass}${passableClass}${logClass}${waterClass}${lavaClass}${machineClass}`;
 
   const link = `<span class="${cls}"
       data-block='${JSON.stringify(block)}'

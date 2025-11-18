@@ -387,6 +387,16 @@ button[data-testid*="connect"]:hover {
   background-color: rgba(255, 99, 71, 0.2) !important;
 }
 
+.clickable-block.log {
+  color: #8B4513 !important; /* Brown color for logs */
+  background-color: rgba(139, 69, 19, 0.1) !important;
+}
+
+.clickable-block.log:hover {
+  color: #654321 !important;
+  background-color: rgba(139, 69, 19, 0.2) !important;
+}
+
 .health-flash {
   color: #ef4444 !important;
   animation: healthFlash 4s ease-out;
@@ -399,6 +409,7 @@ button[data-testid*="connect"]:hover {
   75% { color: #ef4444; }
   100% { color: inherit; }
 }
+
 
 
 

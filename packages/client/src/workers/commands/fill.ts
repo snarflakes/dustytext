@@ -26,7 +26,55 @@ function packCoord96(x: number, y: number, z: number): bigint {
 export class FillCommand implements CommandHandler {
   async execute(context: CommandContext, ...args: string[]): Promise<void> {
     try {
-      // --- 1) Tuple-queue path (keeps queue/build flow consistent) ---
+      // --- 1) Direct coordinate arguments (x y z) ---
+      if (args.length >= 3) {
+        const x = parseInt(args[0], 10);
+        const y = parseInt(args[1], 10);
+        const z = parseInt(args[2], 10);
+        
+        if (!isNaN(x) && !isNaN(y) && !isNaN(z)) {
+          const entityId = encodePlayerEntityId(context.address);
+          
+          // --- 2) Bucket check ---
+          const equippedTool = (globalThis as typeof globalThis & { equippedTool: EquippedTool }).equippedTool;
+          if (!equippedTool || !equippedTool.type?.toLowerCase().includes("bucket")) {
+            window.dispatchEvent(
+              new CustomEvent("worker-log", {
+                detail: "❌ You must equip a bucket to fill with water. Use 'equip bucket' first.",
+              })
+            );
+            return;
+          }
+
+          // --- 3) Execute fillBucket ---
+          const waterCoord = packCoord96(x, y, z);
+          const data = encodeFunctionData({
+            abi: IWorldAbi,
+            functionName: "fillBucket",
+            args: [entityId, waterCoord, equippedTool.slot],
+          });
+
+          const txHash = await context.sessionClient.sendTransaction({
+            to: WORLD_ADDRESS,
+            data,
+            gas: 300000n,
+          });
+
+          window.dispatchEvent(
+            new CustomEvent("worker-log", {
+              detail: `💧 Filled ${equippedTool.type} at (${x}, ${y}, ${z}). Tx: ${txHash}`,
+            })
+          );
+          return;
+        } else {
+          window.dispatchEvent(new CustomEvent("worker-log", {
+            detail: "❌ Invalid coordinates. Usage: fill x y z"
+          }));
+          return;
+        }
+      }
+
+      // --- 2) Tuple-queue path (keeps queue/build flow consistent) ---
       const tuples = parseTuplesFromArgs(args);
       if (tuples.length > 0 && !looksLikeJsonCoord(args[0])) {
         // Use "ai" to enforce one-actor-at-a-time. Change to "human" if you want typed tuples to mix with clicks.

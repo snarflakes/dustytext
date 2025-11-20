@@ -21,7 +21,7 @@ export class HelpCommand implements CommandHandler {
       '  Farming Commands:',
       '       [Till] prepare dirt or grass to become farmland with equipped hoe,',
       '       [Fill] fill equipped bucket with water when standing in water,',
-      '       [Fill (x,y,z)] fill equipped bucket with water from specific coordinates (x,y,z),',
+      '       [Fill x y z] fill equipped bucket with water from specific coordinates x y z,',
       '       [Water] water farmland blocks with equipped water bucket,',
       '       [Plant] plant seeds on farmland at your feet with equipped seeds,',
       '       [Build] place equipped block above your head,',

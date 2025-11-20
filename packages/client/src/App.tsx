@@ -46,6 +46,9 @@ export function App() {
   const livingPlayers = useLivingPlayersCount();
   const [healthStatus, setHealthStatus] = useState<HealthStatus | null>(null);
   const [equippedTool, setEquippedTool] = useState<string | null>(null);
+  const [healthFlash, setHealthFlash] = useState(false);
+  const [previousHealthPercent, setPreviousHealthPercent] = useState<number | null>(null);
+  const [previousAliveStatus, setPreviousAliveStatus] = useState<boolean | null>(null);
 
   const [log, setLog] = useState<string[]>([
     "<i>Welcome to Dusty Text</i>",
@@ -243,11 +246,27 @@ export function App() {
       try {
         const status = await getHealthStatus(sessionAddress);
         console.log('Health status received:', status);
-        // Always update health status, even if dead
+        
+        // Check for death (alive -> dead transition)
+        if (previousAliveStatus === true && !status.isAlive) {
+          setHealthFlash(true);
+          setTimeout(() => setHealthFlash(false), 4000);
+        }
+        // Check for significant health drop (while alive)
+        else if (previousHealthPercent !== null && status.isAlive && 
+            previousHealthPercent - status.lifePercentage > 5) {
+          setHealthFlash(true);
+          setTimeout(() => setHealthFlash(false), 4000);
+        }
+        
+        // Always update health status
         setHealthStatus(status);
+        if (status.isAlive) {
+          setPreviousHealthPercent(status.lifePercentage);
+        }
+        setPreviousAliveStatus(status.isAlive);
       } catch (error) {
         console.log('Health status fetch failed, keeping previous status:', error);
-        // Don't update healthStatus on error - keep previous value
       }
     };
     
@@ -261,7 +280,7 @@ export function App() {
       console.log('Health polling interval cleared');
       clearInterval(interval);
     };
-  }, [sessionClient, isConnected]);
+  }, [sessionClient, isConnected, previousHealthPercent, previousAliveStatus]);
 
   // Update health after specific commands with rate limiting
   useEffect(() => {
@@ -270,6 +289,8 @@ export function App() {
 
     const updateHealthAfterCommand = async () => {
       const now = Date.now();
+      console.log('updateHealthAfterCommand called, time since last:', now - lastHealthUpdate);
+      
       if (now - lastHealthUpdate < MIN_UPDATE_INTERVAL) {
         console.log('Health update skipped - too soon since last update');
         return;
@@ -278,11 +299,34 @@ export function App() {
       const sessionAddress = sessionClient?.account?.address || 
                             (typeof sessionClient?.account === 'string' ? sessionClient.account : null);
       
-      if (!sessionAddress || !isConnected) return;
+      if (!sessionAddress || !isConnected) {
+        console.log('Health update skipped - no address or not connected');
+        return;
+      }
       
       try {
         const status = await getHealthStatus(sessionAddress);
+        console.log('Health status after command:', status, 'Previous health:', previousHealthPercent, 'Previous alive:', previousAliveStatus);
+        
+        // Check for death (alive -> dead transition)
+        if (previousAliveStatus === true && !status.isAlive) {
+          console.log('DEATH DETECTED - triggering flash');
+          setHealthFlash(true);
+          setTimeout(() => setHealthFlash(false), 4000);
+        }
+        // Check for significant health drop (while alive)
+        else if (previousHealthPercent !== null && status.isAlive && 
+            previousHealthPercent - status.lifePercentage > 5) {
+          console.log('HEALTH DROP DETECTED - triggering flash');
+          setHealthFlash(true);
+          setTimeout(() => setHealthFlash(false), 4000);
+        }
+        
         setHealthStatus(status);
+        if (status.isAlive) {
+          setPreviousHealthPercent(status.lifePercentage);
+        }
+        setPreviousAliveStatus(status.isAlive);
         lastHealthUpdate = now;
         console.log('Health updated after command');
       } catch (error) {
@@ -306,7 +350,7 @@ export function App() {
 
     window.addEventListener("worker-log", onWorkerLog as EventListener);
     return () => window.removeEventListener("worker-log", onWorkerLog as EventListener);
-  }, [sessionClient, isConnected]);
+  }, [sessionClient, isConnected, previousHealthPercent, previousAliveStatus]);
 
   // Update equipped tool when equip/unequip commands are executed
   useEffect(() => {
@@ -409,7 +453,7 @@ export function App() {
       return;
     }
 
-    // Game commands using workers
+    // Game commands using worker’s
     if (command === 'spawn' || command.startsWith('spawn ')) {
       runCommand(command.trim());
     } else if (command === 'look' || command === 'l') {
@@ -617,7 +661,7 @@ export function App() {
               🤚 {equippedTool || 'None'}
             </div>
             {healthStatus && healthStatus.isAlive && (
-              <div className="text-sm">
+              <div className={`text-sm ${healthFlash ? 'health-flash' : ''}`}>
                 ❤️ {healthStatus.lifePercentage.toFixed(1)}%
               </div>
             )}
@@ -688,7 +732,7 @@ export function App() {
           {/* Terminal */}
           <div 
             ref={terminalRef}
-            className="terminal"
+            className={`terminal ${healthFlash ? 'health-flash' : ''}`}
           >
             {log.map((line, i) => (
               <div 

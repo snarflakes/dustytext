@@ -95,6 +95,16 @@ export class DoneCommand implements CommandHandler {
         } catch (error) {
           const errorMsg = String(error);
           
+          // Handle chunk commitment expired errors specifically
+          if (errorMsg.includes('Chunk commitment expired') || 
+              errorMsg.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000') ||
+              errorMsg.includes('0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000184368756e6b20636f6d6d69746d656e7420657870697265640000000000000000')) {
+            window.dispatchEvent(new CustomEvent("worker-log", {
+              detail: `❌ Chunk commitment expired during batch mining. This is a blockchain timing issue - please wait 10 minutes and try mining again.`
+            }));
+            return;
+          }
+          
           // Log the specific batch error reason
           if (errorMsg.includes('unreachable') || errorMsg.includes('not mineable')) {
             window.dispatchEvent(new CustomEvent("worker-log", {
@@ -143,9 +153,20 @@ export class DoneCommand implements CommandHandler {
           }
         } catch (err: unknown) {
           const msg = err instanceof Error ? err.message : String(err);
-          window.dispatchEvent(new CustomEvent("worker-log", {
-            detail: `❌ ${action} failed at (${block.x},${block.y},${block.z}): ${msg}`
-          }));
+          
+          // Handle chunk commitment expired errors specifically for individual mining
+          if (action === "mine" && (
+              msg.includes('Chunk commitment expired') || 
+              msg.includes('4368756e6b20636f6d6d69746d656e7420657870697265640000000000000000') ||
+              msg.includes('0x08c379a0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000184368756e6b20636f6d6d69746d656e7420657870697265640000000000000000'))) {
+            window.dispatchEvent(new CustomEvent("worker-log", {
+              detail: `❌ ${action} failed at (${block.x},${block.y},${block.z}): Chunk commitment expired. This is a blockchain timing issue - please wait 10 minutes and try mining again.`
+            }));
+          } else {
+            window.dispatchEvent(new CustomEvent("worker-log", {
+              detail: `❌ ${action} failed at (${block.x},${block.y},${block.z}): ${msg}`
+            }));
+          }
         }
 
         await delay(500);
@@ -160,6 +181,8 @@ export class DoneCommand implements CommandHandler {
     clearSelection(); // release owner & unpause
   }
 }
+
+
 
 
 

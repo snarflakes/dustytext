@@ -230,6 +230,11 @@ export class BuildCommand implements CommandHandler {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: "❌ Cannot build here - insufficient permissions or protected area. You may need to be inside your own forcefield or have proper building rights."
         }));
+      } else if (errorMessage.includes("4f6e6c7920617070726f7665642063616c6c6572732063616e206275696c6420696e2074686520666f726365206669656c640000000000000000000000000000") ||
+                 errorMessage.includes("Only approved callers can build in the force field")) {
+        window.dispatchEvent(new CustomEvent("worker-log", {
+          detail: "❌ Only approved callers can build in this forcefield. You need to be added to the approved list by the forcefield owner to build here."
+        }));
       } else {
         window.dispatchEvent(new CustomEvent("worker-log", {
           detail: `❌ Build failed: ${errorMessage}`

@@ -131,6 +131,15 @@ export class SpawnCommand implements CommandHandler {
               return;
             }
             
+            // Check for "Not enough RAID" error
+            if (errorStr.includes('4e6f7420656e6f75676820524149440000000000000000000000000000000000') ||
+                errorStr.includes('Not enough RAID')) {
+              window.dispatchEvent(new CustomEvent("worker-log", {
+                detail: `❌ Spawn to tile failed: Not enough RAID tokens. This spawn tile requires RAID tokens in your wallet to spawn here. Try a different spawn tile or acquire RAID tokens first.`
+              }));
+              return;
+            }
+            
             // Show the full error for debugging token gating and other requirements
             window.dispatchEvent(new CustomEvent("worker-log", {
               detail: `❌ Spawn to tile failed: ${errorStr}`

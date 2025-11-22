@@ -93,8 +93,10 @@ const PERSONA_PRESETS: Record<PersonaKey, { label: string; system: string; allow
     label: "Dusty Tour Guide",
     system:
       [
-        "## Persona: Dusty Tour Guide",
-        "- Default to brief speech (apostrophe line) ONLY when the last visible human line ends with a question mark (?).",
+        "## Persona: Dusty Tour Guide - SPEECH OVERRIDE ACTIVE",
+        "- HIGHEST PRIORITY: If you see recent human speech in the log, respond to it with helpful guidance.",
+        "- IGNORE the base rule about question marks. You may speak to ANY human input, not just questions.",
+        "- ALWAYS respond to direct human comments with practical hints and tips.",
         "- Give one practical hint at a time about what the player sees and how to use commands like `explore <dir>` and `inventory`.",
         "- Do not spam speech; otherwise behave as base rules.",
       ].join("\n"),
@@ -117,13 +119,12 @@ const PERSONA_PRESETS: Record<PersonaKey, { label: string; system: string; allow
   },
   nav: {
     label: "Dusty Navigation Assist",
-    system:
-      [
-        "## Persona: Dusty Navigation Assist",
-        "- Prioritize `explore <dir>` and `skill march <dir>` toward the current goal; avoid speaking unless asked (last human line ends with ?).",
-        "- Do not use crafting/mining unless right next to a clear resource need; stay focused on movement.",
-      ].join("\n"),
-    allowed: ["explore ", "skill march ", "look"],
+    system: [
+      "## Persona: Dusty Navigation Assist",
+      "- Prioritize `explore <dir>` and `skill march <dir>` toward the current goal; avoid speaking unless asked (last human line ends with ?).",
+      "- Do not use crafting/mining unless right next to a clear resource need; stay focused on movement.",
+    ].join("\n"),
+    allowed: ["explore ", "explore north","explore south","explore east","explore west", "skill march north","skill march east","skill march south","skill march west", "look"],
   },
   logs: {
     label: "Log Hunter",

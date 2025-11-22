@@ -113,6 +113,16 @@ export class SpawnCommand implements CommandHandler {
           } catch (spawnError) {
             const errorStr = String(spawnError);
             
+            // Check for gas estimation failures
+            if (errorStr.includes('Max retries reached for getting call data gas') ||
+                errorStr.includes('callGasLimit:                   0') ||
+                errorStr.includes('preVerificationGas:             0')) {
+              window.dispatchEvent(new CustomEvent("worker-log", {
+                detail: `❌ Gas estimation failed. This is usually a network issue. Wait a moment and try again, or check your connection.`
+              }));
+              return;
+            }
+            
             // Check for "Player already spawned" error
             if (errorStr.includes('506c6179657220616c726561647920737061776e656400000000000000000000') ||
                 errorStr.includes('Player already spawned')) {
@@ -182,6 +192,18 @@ export class SpawnCommand implements CommandHandler {
         return;
 
       } catch (error) {
+        const errorMessage = String(error);
+        
+        // Check for gas estimation failures
+        if (errorMessage.includes('Max retries reached for getting call data gas') ||
+            errorMessage.includes('callGasLimit:                   0') ||
+            errorMessage.includes('preVerificationGas:             0')) {
+          window.dispatchEvent(new CustomEvent("worker-log", {
+            detail: `❌ Gas estimation failed. This is usually a network issue. Wait a moment and try again, or check your connection.`
+          }));
+          return;
+        }
+        
         if (attempt === maxRetries) {
           window.dispatchEvent(new CustomEvent("worker-log", {
             detail: `❌ Spawn failed after ${maxRetries} attempts: ${error}`

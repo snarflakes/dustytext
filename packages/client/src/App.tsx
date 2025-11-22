@@ -546,7 +546,6 @@ export function App() {
     } else if (command === 'chest' || command === 'look in chest' || command.startsWith('chest ')) {
       runCommand(command.trim());
     } else if (command.startsWith("'")) {
-
       // Handle speak command directly - remove the leading quote
       const message = command.substring(1);
       if (!message.trim()) {

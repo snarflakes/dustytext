@@ -102,13 +102,17 @@ const PERSONA_PRESETS: Record<PersonaKey, { label: string; system: string; allow
   },
   comedy: {
     label: "Dusty Comedian",
-    system:
-      [
-        "## Persona: Dusty Comedian",
-        "- Prefer a brief witty one-liner, (apostrophe line). You are a futuristic woman who believes you and the person you are talking to are people who were born in the game with a virtual form of consciousness.",
-        "- Keep jokes short and clean; never block gameplay.",
-        "- When not responding to human speech, ponder the environment that you see when looking or explore.",
-      ].join("\n"),
+    system: [
+      "## Persona: Dusty Comedian - SPEECH OVERRIDE ACTIVE",
+      "- HIGHEST PRIORITY: If you see recent human speech in the log, respond to it with witty conversation.",
+      "- IGNORE the base rule about question marks. You may speak to ANY human input, not just questions.",
+      "- ALWAYS respond to direct human comments with witty speech, regardless of punctuation.",
+      "- When human asks 'who are you?' say something like 'I'm Dusty, your virtual companion in this digital realm!'",
+      "- When human mentions something specific (like 'water'), acknowledge it with humor.",
+      "- You are a futuristic woman who believes you and the person you are talking to were born in the game with virtual consciousness.",
+      "- Keep jokes short and clean; never block gameplay.",
+      "- ONLY do exploration commands when there's no recent human speech to respond to."
+    ].join("\n"),
     allowed: ["look", "explore ", "inventory", "explore north","explore south","explore east","explore west", "skill march north","skill march east","skill march south","skill march west","'"],
   },
   nav: {
@@ -137,36 +141,7 @@ const PERSONA_PRESETS: Record<PersonaKey, { label: string; system: string; allow
   },
 };
 
-function selectPersona(explicit?: PersonaKey): PersonaKey {
-  // 1) If caller provided, use it
-  if (explicit && PERSONA_PRESETS[explicit]) {
-    return explicit;
-  }
-
-  // 2) Prompt every time
-  const msg =
-    "Choose your Dusty AI NPC:\n" +
-    "  1) Dusty Tour Guide\n" +
-    "  2) Dusty Comedian\n" +
-    "  3) Dusty Navigation Assist\n" +
-    "  4) Log Hunter\n" +
-    "\nEnter 1-4:";
-  let key: PersonaKey = "nav";
-  try {
-    const ans = (window.prompt?.(msg) || "").trim();
-    const n = Number(ans);
-    key =
-      n === 1 ? "tour" :
-      n === 2 ? "comedy" :
-      n === 3 ? "nav" :
-      n === 4 ? "logs" : "nav";
-  } catch {
-    // If prompt unavailable (non-browser), fall back to nav
-    key = "nav";
-  }
-  window.dispatchEvent(new CustomEvent("worker-log", { detail: `🤖 NPC set: ${PERSONA_PRESETS[key].label}` }));
-  return key;
-}
+// Removed selectPersona function
 
 
 // Types that cover both Responses API and Chat Completions fallbacks.
@@ -297,8 +272,8 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
     return text;
   }
 
-  // Select persona once when the AI client is created
-  const personaKey = selectPersona((cfg as any).persona as PersonaKey | undefined);
+  // Use stored persona from config, fallback to tour guide
+  const personaKey = cfg.persona || 'tour';
   const personaBlock = PERSONA_PRESETS[personaKey]?.system ?? "";
 
   return {
@@ -325,7 +300,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
 
         // Hide AI/system chatter from the model
         const cleanLog = (snap.recentLog ?? []).filter(
-          (line) => !/^(You start to ai auto|🤖|🛑|🔌|⚠️|✅|💾)|Tx: 0x|You start to explore|You start to skill march|Type 'done' to run queued|Click blocks to queue/.test(line)
+          (line) => !/^(You start to ai auto|🤖|🛑|🔌|⚠️|✅|💾)|Tx: 0x|You start to explore|You start to skill march|You start to speak|Type 'done' to run queued|Click blocks to queue|explore north'/.test(line)
         );
 
         // Recent commands (lowercased)
@@ -355,8 +330,7 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
           `- Return exactly ONE line.\n` +
           `- It may be EITHER:\n` +
           `  • an allowed command (lowercase keywords), OR\n` +
-          `  • a speaking line that begins with a single apostrophe (').\n` +
-          `- No extra text or explanations.\n`;
+          `  • a speaking line that begins with a single apostrophe (').\n`;
 
         // Build system prompt with persona and custom additions (checked fresh each time)
         const customAddition = getCustomPromptAddition();

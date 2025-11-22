@@ -28,8 +28,9 @@ export interface AIConfig {
   temperature: number;
   maxTokens: number;
   systemPrompt: string;
-  rememberSettings: boolean; // repurposed to mean "remember in this tab" (sessionStorage)
+  rememberSettings: boolean;
   allowedCommands?: string[];
+  persona?: 'tour' | 'comedy' | 'nav' | 'logs';
 
   // Azure OpenAI specific
   endpoint?: string;
@@ -66,7 +67,7 @@ export const DEFAULT_SYSTEM_PROMPT = `You are an AI living in a text-based game 
 Your job is to analyze the game state and output exactly ONE next action (one line). Be efficient and SAFE.
 
 Key game system
-1) You may speak briefly by starting the line with a single apostrophe ('). Only speak if the LAST visible human line ends with a question mark (?).
+1) You may speak briefly by starting the line with a single apostrophe ('). Only speak if the LAST visible human line ends with a question mark (?). Persona-specific instructions may override this preference (e.g., Dusty Comedian).
 2) Use safe traversal skills; do not emit raw "move".
 
 Current position (authoritative source)
@@ -210,6 +211,7 @@ export class RegisterAICommand implements CommandHandler {
       `  Rate Limit: ${aiConfig.rateLimit || 1000}ms`,
       `  Debug Logging: ${aiConfig.debugLogging ? 'Yes' : 'No'}`,
       `  Remember in this tab: ${aiConfig.rememberSettings ? 'Yes' : 'No'}`,
+      `  Persona: ${aiConfig.persona || 'tour'}`,
     ];
     
     if (aiConfig.provider === 'Azure OpenAI') {
@@ -278,6 +280,12 @@ export class RegisterAICommand implements CommandHandler {
         this.handleRememberSettings(trimmed);
         break;
       case 11: // System prompt
+        this.handleSystemPrompt(trimmed);
+        break;
+      case 12: // Persona selection
+        this.handlePersonaSelection(trimmed);
+        break;
+      case 13: // Custom prompt (moved from 12)
         this.handleSystemPrompt(trimmed);
         break;
     }
@@ -554,19 +562,44 @@ export class RegisterAICommand implements CommandHandler {
     if (choice === 'y' || choice === 'yes') {
       setupState.config.allowedCommands = DEFAULT_ALLOWED_COMMANDS;
       setupState.config.systemPrompt = buildDefaultSystemPrompt(DEFAULT_ALLOWED_COMMANDS);
-      this.completeSetup();
+      setupState.step = 12; // Move to persona selection
+      this.showStep12();
     } else if (choice === 'n' || choice === 'no') {
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: "Enter your custom system prompt: [your prompt]" 
       }));
-      setupState.step = 12; // Custom prompt step
-    } else if (setupState.step === 12) {
+      setupState.step = 13; // Custom prompt step
+    } else if (setupState.step === 13) {
       // Handle custom prompt input
       setupState.config.systemPrompt = input;
-      this.completeSetup();
+      setupState.step = 12; // Move to persona selection after custom prompt
+      this.showStep12();
     } else {
       window.dispatchEvent(new CustomEvent("worker-log", { 
         detail: "❌ Enter 'y' for default or 'n' for custom: [y/n]" 
+      }));
+    }
+  }
+
+  private showStep12(): void {
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Step 12/12: AI Persona Selection" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "1. Dusty Tour Guide (helpful hints)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "2. Dusty Comedian (witty commentary)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "3. Dusty Navigation Assist (efficient movement)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "4. Log Hunter (focused exploration)" }));
+    window.dispatchEvent(new CustomEvent("worker-log", { detail: "Enter choice (1-4, default: 1):" }));
+  }
+
+  private handlePersonaSelection(input: string): void {
+    const choice = parseInt(input) || 1; // Default to 1 (tour guide)
+    const personas = ['tour', 'comedy', 'nav', 'logs'] as const;
+    
+    if (choice >= 1 && choice <= 4) {
+      setupState.config.persona = personas[choice - 1];
+      this.completeSetup();
+    } else {
+      window.dispatchEvent(new CustomEvent("worker-log", { 
+        detail: "❌ Invalid choice. Enter 1, 2, 3, or 4: registerai [number]" 
       }));
     }
   }

@@ -304,8 +304,20 @@ export const clientOpenAI = (cfg: AIConfig): AIClient => {
 
         // Hide AI/system chatter from the model
         const cleanLog = (snap.recentLog ?? []).filter(
-          (line) => !/^(You start to ai auto|🤖 Thinking|🛑 AI mode|🔌|⚠️ AI produced|✅|💾)|Tx: 0x|Type 'done' to run queued|Click blocks to queue|Exploring [A-Z]+ from.*— clicks will queue|Block \d+ Block \d+|\+\d+: |💡 Type 'done'/.test(line)
-        );
+          (line) => !/^(You start to ai auto|🤖 Thinking|🤖 Suggestion:|🛑 AI mode|🔌|⚠️ AI produced|✅|💾)|Tx: 0x|Type 'done' to run queued|Click blocks to queue|Exploring [A-Z]+ from.*— clicks will queue|Block \d+ Block \d+|\+\d+: |💡 Type 'done'/.test(line)
+        ).map(line => {
+          // Simplify look command output - keep biome, terrain, and coordinates only
+          if (line.match(/^\[.*\]You are standing on .* You are in .* You are at \(-?\d+, -?\d+, -?\d+\)\.$/)) {
+            const biomeMatch = line.match(/^\[([^\]]+)\]/);
+            const terrainMatch = line.match(/You are standing on ([^.]+)\./);
+            const coordMatch = line.match(/You are at (\(-?\d+, -?\d+, -?\d+\))\./);
+            
+            if (biomeMatch && terrainMatch && coordMatch) {
+              return `[${biomeMatch[1]}] ${terrainMatch[1]} ${coordMatch[1]}`;
+            }
+          }
+          return line;
+        });
 
         // Recent commands (lowercased)
         const recentCmds = (snap.recentCommands ?? []).map((s) => String(s).toLowerCase());

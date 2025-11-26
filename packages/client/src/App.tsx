@@ -130,8 +130,7 @@ export function App() {
         appendAILog(`[AI_SAY] ${message}`);
         if (!message) return; // ignore empty speech like just "'"
         
-        // Display AI speech directly without "You start to..." message
-        setLog(prev => [...prev, `<span class="speak-prefix">You say,</span> <span class="speak-message">"${message}"</span>`]);
+        // Don't display AI speech in UI - the 🤖 Suggestion: line already shows it
         return;
       }
 

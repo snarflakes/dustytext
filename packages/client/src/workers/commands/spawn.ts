@@ -118,7 +118,7 @@ export class SpawnCommand implements CommandHandler {
                 errorStr.includes('callGasLimit:                   0') ||
                 errorStr.includes('preVerificationGas:             0')) {
               window.dispatchEvent(new CustomEvent("worker-log", {
-                detail: `❌ Gas estimation failed. This is usually a network issue. Wait a moment and try again, or check your connection.`
+                detail: `❌ Gas estimation failed. This is usually a network issue. Wait a moment and try again, check your connection, or perhaps you need to 'wakeup'?`
               }));
               return;
             }
@@ -199,7 +199,7 @@ export class SpawnCommand implements CommandHandler {
             errorMessage.includes('callGasLimit:                   0') ||
             errorMessage.includes('preVerificationGas:             0')) {
           window.dispatchEvent(new CustomEvent("worker-log", {
-            detail: `❌ Gas estimation failed. This is usually a network issue. Wait a moment and try again, or check your connection.`
+            detail: `❌ Gas estimation failed. This is usually a network issue. Wait a moment and try again, check your connection, or perhaps you need to 'wakeup'?`
           }));
           return;
         }

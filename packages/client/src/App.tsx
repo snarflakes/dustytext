@@ -123,13 +123,15 @@ export function App() {
       if (!aiOnRef.current) return;
 
       // If the AI produced a speaking line (starts with a single apostrophe),
-      // convert it to your speak command.
+      // handle it directly without going through command pipeline
       if (cmd.startsWith("'")) {
         const message = cmd.slice(1).trim();
-      //tag AI speaking line  
+        //tag AI speaking line  
         appendAILog(`[AI_SAY] ${message}`);
         if (!message) return; // ignore empty speech like just "'"
-        runCommand(`speak ${message}`);
+        
+        // Display AI speech directly without "You start to..." message
+        setLog(prev => [...prev, `<span class="speak-prefix">You say,</span> <span class="speak-message">"${message}"</span>`]);
         return;
       }
 

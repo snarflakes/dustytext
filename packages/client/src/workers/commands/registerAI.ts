@@ -104,6 +104,10 @@ March skill (use this instead of raw “move”)
   If your last action was "explore <dir>" and no movement event has appeared since, your next action must be "skill march <dir>" (not another explore).
 - Re-scan at least every 5 steps in the same direction, or sooner if blocked.
 
+March skill error handling (critical)
+- "Cannot move through solid blocks" after skill march = you need fresh scan data
+- "❌ Cannot move through solid blocks" means your last march used stale explore data
+
 Hard anti-spam rules (must follow)
 - Never issue "explore <dir>" twice in a row without a movement event in between.
 - After any error like "march paused" or "Cannot move through solid blocks":

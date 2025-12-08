@@ -186,8 +186,9 @@ export class SpawnCommand implements CommandHandler {
 
         if (!txHash) throw lastErr ?? new Error('Spawn failed');
 
+        const clickableTx = `<span class="cursor-pointer" onclick="navigator.clipboard.writeText('${txHash}'); this.textContent='[Copied!]'; setTimeout(() => this.textContent='[Tx]', 1000)" title="Click to copy full transaction hash">[Tx]</span>`;
         window.dispatchEvent(new CustomEvent("worker-log", {
-          detail: `You blink into existence... born unto a blockchain. You are now in the matrix. Now type "look" or "help" to guide you.✅ Spawn completed: ${txHash}`
+          detail: `You blink into existence... born unto a blockchain. You are now in the matrix. Now type "look" or "help" to guide you. ✅ Spawn completed: ${clickableTx}`
         }));
         return;
 

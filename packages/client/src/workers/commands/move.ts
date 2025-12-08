@@ -201,8 +201,9 @@ export class MoveCommand implements CommandHandler {
             }
           }
 
+          const clickableTx = `<span class="cursor-pointer" onclick="navigator.clipboard.writeText('${txHash}'); this.textContent='[Copied!]'; setTimeout(() => this.textContent='[Tx]', 1000)" title="Click to copy full transaction hash">[Tx]</span>`;
           window.dispatchEvent(new CustomEvent("worker-log", { 
-            detail: `🏃 You ran ${moveDescription} ${elevationMessage}. Tx: ${txHash}` 
+            detail: `🏃 You ran ${moveDescription} ${elevationMessage}. ${clickableTx}` 
           }));
 
           // Auto-look after move
@@ -318,7 +319,7 @@ export class MoveCommand implements CommandHandler {
 
         const clickableTx = `<span class="cursor-pointer" onclick="navigator.clipboard.writeText('${txHash}'); this.textContent='[Copied!]'; setTimeout(() => this.textContent='[Tx]', 1000)" title="Click to copy full transaction hash">[Tx]</span>`;
         window.dispatchEvent(new CustomEvent("worker-log", { 
-          detail: `✅ Move ${moveDescription} completed${elevationMessage}. ${clickableTx}` 
+          detail: `🏃 You ran ${moveDescription} ${elevationMessage}. ${clickableTx}` 
         }));
 
         // Track progress for movement
